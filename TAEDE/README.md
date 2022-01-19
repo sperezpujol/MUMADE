@@ -1,10 +1,17 @@
 # MUMADE_TAEDE
 
-This repository contains the execution environment of the final work of TAEDE of the MUMADE of the UCLM.
+  + Subject: Processing and Exploratory Analysis of Economic Data (TAEDE)
+  + Master's Degree: Master's Degree in Modeling and Analysis of Economic Data (MUMADE)
+  + University: Universidad de Castilla-La Mancha (UCLM)
+  + Authors: 
+    + [@sperezpujol](https://github.com/sperezpujol)
+    + [@margoprogramming01](https://github.com/margoprogramming01)
+    + [@sotnas98](https://github.com/sotnas98).
+    
+This folder contains the environment of a work on _eSports_ carried out with R through its R Studio interface, and captured all this in a `.pdf` document through R Markdown and a presentation with `xaringan themer`.
 
-Puede visualizar en formato _.pdf_ los resultados finales en la carpeta [`outputs`](https://github.com/sperezpujol/MUMADE_TAEDE/tree/main/outputs).
+  + Final report [`Informe_final.pdf`](https://github.com/sperezpujol/MUMADE_TAEDE/blob/main/outputs/Informe_final.pdf).
+  + Report presentation in [Presentación_final.pdf](https://github.com/sperezpujol/MUMADE_TAEDE/blob/main/outputs/Presentaci%C3%B3n_final.pdf) (realizado con Xaringan Themer de @gadenbuie - https://github.com/gadenbuie/xaringanthemer).
 
-  + Report final en [`Informe_final.pdf`](https://github.com/sperezpujol/MUMADE_TAEDE/blob/main/outputs/Informe_final.pdf).
-  + Presentación del report en [Presentación_final.pdf](https://github.com/sperezpujol/MUMADE_TAEDE/blob/main/outputs/Presentaci%C3%B3n_final.pdf) (realizado con Xaringan Themer de @gadenbuie - https://github.com/gadenbuie/xaringanthemer).
+This work was collaborative with [@margoprogramming01](https://github.com/margoprogramming01) and [@sotnas98](https://github.com/sotnas98).
 
-Esto fue un proyecto colaborativo con [@margoprogramming01](https://github.com/margoprogramming01) y [@sotnas98](https://github.com/sotnas98).
