@@ -1,0 +1,550 @@
+---
+title: "Ejercicio Evaluable Tema V. Tablas de contingencia. Asociación. Modelos log-lineales"
+author: "Bermann, M.A. & Pérez, R.S."
+lang: es
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+header-includes:
+- \usepackage{fancyhdr}
+- \pagestyle{fancy}
+- \fancyfoot[CO,CE]{Grupo 03 - TMAAS - MUMADE}
+- \fancyfoot[LE,RO]{\thepage}
+- \usepackage{titling}
+- \pretitle{\begin{center}
+    \includegraphics[width=2in,height=2in]{logo_color.png}\LARGE\\}
+- \posttitle{\end{center}}
+documentclass: article
+bibliography: library.bib
+output:
+  pdf_document:
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+# Ajustes iniciales de los chunk
+knitr::opts_chunk$set(echo = F, warning = F, message = F)
+```
+
+```{r, include = FALSE}
+# Limpieza del entorno
+rm(list = ls())
+
+# Activación de paquetes
+library(readxl)
+library(tidyr)
+library(dplyr)
+library(kableExtra)
+library(knitr)
+library(ggplot2)
+library(GGally)
+library(car)
+library(stargazer)
+library(lmtest)
+library(patchwork)
+library(vcd)
+library(gplots)
+library(DescTools)
+
+# Importación de datos
+bodegueras_or <- read_excel("TMAAS_05.xlsx", sheet = "GRUPO_03")
+
+# Eliminación de datos repetidos
+bodegueras <- bodegueras_or[c(-705),]
+bodegueras <- data.frame(bodegueras, row.names = 1)
+
+# Eliminación de missing_values
+bodegueras<- bodegueras %>%
+  filter(! is.na(FORMAJ) & ! is.na(EMPLEADOS) & ! is.na(RENFIN) & ! is.na(MARGEN) & !is.na(RES))
+```
+
+\newpage
+
+# Introducción
+
+En este informe[^1] se va a proceder a desarrollar las cuestiones planteadas en el ejercicio evaluable del Tema 5 correspondiente al programa de la asignatura Técnicas Multivariantes Aplicadas al Análisis Sectorial del Máster Universitario en Modelización y Análisis de Datos Económicos (MUMADE). Para ello se va a utilizar información sobre **empresas bodegueras** españolas con el objetivo final de poder responder a las cuestiones mencionadas.
+
+En un paso previo a comenzar el desarrollo de este informe es preciso **definir las variables**[^2] que forman parte de la base de datos de las ``r count(bodegueras)`` empresas bodegueras con las que vamos a trabajar.
+
+  + `FORMAJ`: Forma jurídica
+  + `EMPLEADOS`: Número de empleados
+  + `RENFIN`:	Rentabilidad financiera
+  + `MARGEN`:	Margen
+  + `RES`:	Resultado de la explotación
+
+Los datos a utilizar en este informe se basan en información que puede ser extraída de la base de datos Sabi, la cual contiene datos sobre empresas de España y Portugal [@BVD2021], habiéndose personalizado dichos datos en la hoja de Excel para el GRUPO_03[^3] y habiendo para este informe, tal y como se ha mencionado anteriormente, un total de ``r count(bodegueras)`` empresas como muestra inicial a estudiar.
+
+[^1]: Para la elaboración de este informe se ha utilizado el software R, a través de su entorno RStudio y generándose la maquetación vía R Markdown. Se han utilizado numerosas fuentes para el maquetado a partir de ayudas de @Allaire2021, @Cano2021, @CRANR-Project2021, @DataCamp2021a, @Hlavac2018, @Keyes2019, @Kobi2010, @Luque2019, @Luque2019b, @VanHespen2016, @Xie2021, @Xie2021a y @Zhu2019.
+
+[^2]: Cabe decir que en el archivo original Microsoft&reg; Excel&reg;, para el GRUPO_03, se repite una observación, en concreto _Mostos y Vinos Beniganim_, por lo que se ha procedido a eliminar la repetición de dicha observación. Así mismo se han eliminado los _missing values_. Por lo tanto, con estos ajustes, se ha pasado de ``r count(bodegueras_or)`` observaciones a ``r count(bodegueras)`` como punto de partida para desarrollar las cuestiones planteadas.
+
+[^3]: GRUPO_03 es el nombre de la hoja del libro de Excel asignada para el informe.
+
+Los principales datos estadísticos de las variables con las que se va a trabajar son:
+
+```{r}
+# Creación de una tabla
+bodegueras %>% 
+  summary() %>% 
+  kable(booktabs = TRUE, 
+        format = "latex",
+        caption = "Datos estadísticos de las variables",
+        digits = 2) %>%
+  kable_styling(font_size = 8,
+                latex_options = c("striped", "condensed", "hold_position"), 
+                position = "center", 
+                full_width = F) %>% 
+  row_spec(0, bold = T, color = "black")
+```
+
+Como podemos observar al ser datos "factor", sólo nos arrojan los números de observaciones por variable.
+
+\newpage
+
+# 1. Análisis de factores
+
+A continuación, se procederá a **mostrar gráficamente** y se comentará la **estructura interna** de cada uno de los 5 factores (`FORMAJ`, `EMPLEADOS`, `RENFIN`, `MARGEN` y `RES`).
+
+```{r, fig.align = 'center', fig.height = 5, fig.width = 20}
+# Creación de gráficos de los factores
+g1 <- bodegueras %>% 
+  ggplot(aes(x = FORMAJ)) + 
+  ylab('Nº de frecuencias') + 
+  xlab('Forma Jurídica') + 
+  ggtitle('Forma jurídica') + 
+  stat_count(geom = "bar", 
+             aes(fill = FORMAJ)) + 
+  theme_minimal()
+
+g2 <- bodegueras %>% 
+  ggplot(aes(x = EMPLEADOS)) + 
+  ylab('Nº de Frecuencias') + 
+  xlab('Tipo de empresa por nº de empleados') + 
+  ggtitle('Tamaño de la empresa') + 
+  stat_count(geom = "bar", 
+             aes(fill = EMPLEADOS)) + 
+  theme_minimal()
+
+g3 <- bodegueras %>% 
+  ggplot(aes(x = RENFIN)) + 
+  ylab('Nº de frecuencias') + 
+  xlab('Rentabilidad Financiera') + 
+  ggtitle('Rentabilidad financiera') + 
+  stat_count(geom = "bar", 
+             aes(fill = RENFIN)) + 
+  theme_minimal()
+
+g4 <- bodegueras %>% 
+  ggplot(aes(x= MARGEN)) + 
+  ylab('Nº de frecuencias') + 
+  xlab('Margen') + 
+  ggtitle('Margen') + 
+  stat_count(geom = "bar", 
+             aes(fill = MARGEN)) + 
+  theme_minimal()
+
+g5 <- bodegueras %>% 
+  ggplot(aes(x = RES)) + 
+  ylab('Nº de frecuencias') + 
+  xlab('Resultado de explotación') + 
+  ggtitle('Resultado de explotación') + 
+  stat_count(geom = "bar", 
+             aes(fill = RES)) + 
+  theme_minimal()
+
+# Representación conjunta de gráficos 
+(g1 | g2) + 
+  plot_annotation(title = 'Frecuencias',
+                  theme = theme(plot.title = element_text(size = 30)))
+
+(g3 | g4 | g5) + 
+  plot_annotation(title = 'Frecuencias',
+                  theme = theme(plot.title = element_text(size = 30)))
+``` 
+
+En primer lugar, cabe decir que la mayor parte de las empresas tienen como forma jurídica **Sociedad Limitada** (SLIMITADA), lo que parece estar con consonancia con que la mayor parte de las empresas se caractericen como **Pequeñas** (PEQUENA) en función de su número de empleados. Como sabemos, las empresas que eligen como forma jurídica SL tienen unos requisitos de constitución más flexibles y que requieren menores aportaciones de capital, a diferencia de las SA.
+
+Por otra parte, si nos fijamos en el análisis financiero de la empresa, podemos ver que la mayor parte presentan **datos** de rentabilidad financiera (RENFIN), margen (MARGEN) y resltados de explotación (RES) **positivos**, hecho que muestra el buen desempeño, en términos generalizados, de las empresas bodegueras analizadas.
+
+Estos datos pueden verse de forma exacta a continuación:
+
+```{r}
+# Frecuencias exactas
+bodegueras %>% 
+  group_by(FORMAJ) %>% 
+  summarise (observaciones = table(FORMAJ)) %>% 
+  kable(booktabs = TRUE, 
+        format = "latex",
+        caption = "Frecuencias por factor FORMAJ") %>%
+  kable_styling(font_size = 8,
+                latex_options = c("striped", "condensed", "hold_position"), 
+                position = "center", 
+                full_width = FALSE) %>% 
+  column_spec(1, bold = T, color = "black") %>% 
+  column_spec(2, width = "30em")
+
+bodegueras %>% 
+  group_by(EMPLEADOS) %>% 
+  summarise (observaciones = table(EMPLEADOS)) %>% 
+  kable(booktabs = TRUE, 
+        format = "latex",
+        caption = "Frecuencias por factor EMPLEADOS") %>%
+  kable_styling(font_size = 8,
+                latex_options = c("striped", "condensed", "hold_position"), 
+                position = "center", 
+                full_width = FALSE) %>% 
+  column_spec(1, bold = T, color = "black") %>% 
+  column_spec(2, width = "30em")
+
+bodegueras %>% 
+  group_by(RENFIN) %>% 
+  summarise (observaciones = table(RENFIN)) %>% 
+  kable(booktabs = TRUE, 
+        format = "latex",
+        caption = "Frecuencias por factor RENFIN") %>%
+  kable_styling(font_size = 8,
+                latex_options = c("striped", "condensed", "hold_position"), 
+                position = "center", 
+                full_width = FALSE) %>% 
+  column_spec(1, bold = T, color = "black") %>% 
+  column_spec(2, width = "30em")
+
+bodegueras %>% 
+  group_by(MARGEN) %>% 
+  summarise (observaciones = table(MARGEN)) %>% 
+  kable(booktabs = TRUE, 
+        format = "latex",
+        caption = "Frecuencias por factor MARGEN") %>%
+  kable_styling(font_size = 8,
+                latex_options = c("striped", "condensed", "hold_position"), 
+                position = "center", 
+                full_width = FALSE) %>% 
+  column_spec(1, bold = T, color = "black") %>% 
+  column_spec(2, width = "30em")
+
+bodegueras %>% 
+  group_by(RES) %>% 
+  summarise (observaciones = table(RES)) %>% 
+  kable(booktabs = TRUE, 
+        format = "latex",
+        caption = "Frecuencias por factor RES") %>%
+  kable_styling(font_size = 8,
+                latex_options = c("striped", "condensed", "hold_position"), 
+                position = "center", 
+                full_width = FALSE) %>% 
+  column_spec(1, bold = T, color = "black") %>% 
+  column_spec(2, width = "30em")
+```
+
+ 
+\newpage
+
+# 2. Tabla de contingencia bidimensional
+
+En este apartado se ha seleccionado el factor de resultado de explotación (RES) que, junto al factor de dimensión de la empresa por número de empleados (EMPLEADOS), permitirá construir una **tabla de contingencia bidimensional y caracterizarla**, lo que en última instancia hace que podamos estudiar la asociación entre dos factores en el apartado 3.
+
+```{r}
+# Data frame con los datos de interés
+muestra.empleados.res <- bodegueras %>% 
+  dplyr::select(EMPLEADOS, RES)
+
+# Creación de la tabla
+tab.empleados.res <- table(muestra.empleados.res)
+
+# Representación de la tabla
+tab.empleados.res %>% 
+  kable(booktabs = TRUE, 
+        format = "latex",
+        caption = "Tamaño de la empresa por nº de empleados vs. resultado de explotación") %>%
+  kable_styling(font_size = 8,
+                latex_options = c("striped", "condensed", "hold_position"), 
+                position = "center", 
+                full_width = FALSE) %>% 
+  column_spec(1, bold = T, color = "black") %>% 
+  column_spec(2, width = "30em")
+```
+
+Los resultados obtenidos nos muestran, tanto en la tabla, como en los gráficos, que el mayor número de frecuencias se concentra en las empresas que tienen un resultado de explotación positivo y una dimensión empresarial por número de empleados pequeña y mediana, tal y como habíamos adelantado en el primer apartado.
+
+```{r, fig.align = 'center', fig.height = 5, fig.width = 10}
+# Representaciones gráficas
+mosaic(tab.empleados.res, 
+       main= "Dimensión empresarial por nº de empleados vs. resultado de explotación", 
+       shade = T, 
+       gp = shading_Marimekko(tab.empleados.res))
+
+balloonplot(t(tab.empleados.res), 
+            main = "Dimensión del grupo empresarial vs forma jurídica", 
+            xlab ="", 
+            ylab = "", 
+            label = T, 
+            show.margins = T)
+
+barplot(tab.empleados.res, 
+        beside = T, 
+        main = "Frecuencias por resultado de explotación",
+        xlab='Resultado de explotación', 
+        ylab = 'Frecuencia',
+        col = c("lightblue", "mistyrose", "grey"))
+legend("right", 
+       legend = rownames(tab.empleados.res),
+       fill = c("lightblue", "mistyrose","grey"))
+
+barplot(t(tab.empleados.res), 
+        beside = T, 
+        main = "Frecuencias por tamaño de la empresa según nº de empleados",
+        xlab = 'Tamaño de la empresa', 
+        ylab = 'Frecuencia',
+        col = c("lightblue", "mistyrose"))
+legend("right", 
+       legend = rownames(t(tab.empleados.res)),
+       fill = c("lightblue", "mistyrose")) 
+```
+
+\newpage
+
+# 3. Contraste de asociación o independencia (I)
+
+En esta sección se procederá a contrastar si existe asociación o independencia entre los factores  que forman parte de la tabla de contingencia del apartado 2 (`EMPLEADOS` y `RES`) mediante la prueba de Chi-cuadrado.
+
+Una vez expuestos los resultados gráficos y de tablas, la _prueba de independencia_ **_Chi-cuadrado_** entre las categorías de las dos variables de tipo factor presenta los siguientes resultados:
+
+```{r, comment = ''}
+# Prueba de independencia Chi-cuadrado
+tab.empleados.res %>% 
+  chisq.test() 
+```
+
+Observamos que el _p-valor_ es inferior a 0.05, por lo que se rechaza la hipotesis nula de independencia, lo que supone que hay **asociación entre los factores `EMPLEADOS` y `RES`**, es decir, que el resultado de explotación de una empresa bodeguera, de la muestra analizada, dependerá del tamaño de la empresa según el número de empleados que tenga. Este análisis se complementa y corrobora mediante la representación gráfica de las desviaciones o diferencias (residuos tipificados) entre las frecuencias de la tabla observada con respecto a las frecuencias que deberían existir en el caso teórico de independencia entre tales atributos o factores.
+
+```{r, fig.align = 'center', fig.height = 5, fig.width = 10}
+assoc(tab.empleados.res, 
+      main="Asociaciones dimensión por empleados y resultado de explotación", 
+      gp = shading_Friendly(tab.empleados.res), 
+      legend=TRUE)
+```
+
+\newpage
+
+# 4. Contraste de asociación o independencia (II)
+
+En este cuarto apartado se va a contrastar si existe asociación o independencia entre los factores  que forman parte de la tabla de contingencia del del apartado 2 (`EMPLEADOS` y `RES`), mediante la estimación de un **Modelo log-lineal** y se determinará si el resultado de la contrastación coincide con el del apartado 3 que se ha realizado mediante la prueba _Chi-cuadrado_.
+
+```{r, comment = ''}
+# Modelo log-lineal
+simplemod.empleados.res <- MASS::loglm(~ RES + EMPLEADOS , 
+                                       data= tab.empleados.res)
+simplemod.empleados.res
+```
+
+En primer lugar, cabe decir que, observando el contraste de _Likelihood Ratio_, se corrobora la asociación entre los factores, pues se rechaza la hipótesis nula (_p-valor_ < 0.05) de especificación adecuada, lo que muestra la no admisión de independencia entre factores. 
+
+Por otro lado, los parámtetros estimados del modelo son:
+
+```{r, comment = ''}
+# Parámetros del modelo
+simplemod.empleados.res$param
+```
+
+En segundo lugar, esto que se ha comentado se puede observar gráficamente. Se puede ver que los colores del gráfico son intensos, lo que indica que el ajuste obtenido del modelo no es del todo adecuado y, por lo tanto, que existe esa asociación al ser una medida de la mayor interacción entre los factores.
+
+```{r, fig.align = 'center', fig.height = 7, fig.width = 10}
+# Gráfico desviaciones
+plot(simplemod.empleados.res, 
+     panel = mosaic, 
+     main = "Modelo independencia entre EMPLEADOS y RES", 
+     residuals_type = c("deviance"), 
+     gp = shading_hcl, 
+     gp_args = list(interpolate = c(0, 1)))
+```
+
+Podemos concluir que **el resultado de la contrastación coincide con los resultados de asociación del apartado 3**.
+
+\newpage
+
+# 5. Tabla de contingencia tridimensional
+
+En este quinto apartado, con el factor seleccionado en el apartado 2 (RES), y los factores FORMAJ y EMPLEADOS, se procederá a construir una **tabla de contingencia de tres dimensiones** y se caracterizará.
+
+```{r}
+# Data frame con los datos de interés
+muestra.empleados.formaj.res <- bodegueras %>% 
+  dplyr::select(EMPLEADOS, FORMAJ, RES)
+
+# Creación de la tabla
+tab.empleados.formaj.res <- table(muestra.empleados.formaj.res)
+```
+
+Los resultados obtenidos nos muestran, a través del gráfico de mosaico, que el mayor número de frecuencias se concentra en las empresas que tienen como forma jurídica Sociedad Limitada, que cuentan con un resultado de explotación positivo y tienen un tamaño por número de empleados pequeño o mediano.
+
+```{r, fig.align = 'center', fig.height = 10, fig.width = 10}
+# Representaciones gráficas
+mosaic(tab.empleados.formaj.res, 
+       main= "Tamaño por EMPLEADOS vs forma Jurídica vs. resultado de explotación", 
+       shade = T, 
+       gp = shading_Marimekko(tab.empleados.formaj.res))
+```
+\newpage
+
+# 6. Contrastes sobre modelos log-lineales
+
+En este sexto apartado se va a contrastar, mediante la estimación de los correspondientes modelos log-lineales, si existe independencia entre los factores involucrados en la tabla de contingencia del apartado anterior (`FORMAJ`, `EMPLEADOS` y `RES`). Además se determinará entre qué factores se da la asociación, si esta existe.
+
+```{r, comment = ''}
+# Modelo log-lineal
+simplemod.empleados.formaj.res <- MASS::loglm(~ RES + FORMAJ + EMPLEADOS, 
+                                              data= tab.empleados.formaj.res)
+simplemod.empleados.formaj.res
+```
+
+En primer lugar, cabe decir que, observando el contraste de _Likelihood Ratio_, se corrobora la asociación entre los factores, pues se rechaza la hipótesis nula (_p-valor_ < 0.05) de especificación adecuada, lo que muestra la no admisión de independencia entre factores.
+
+Por otro lado, los parámtetros estimados del modelo son:
+
+```{r, comment = ''}
+# Parámetros del modelo
+simplemod.empleados.formaj.res$param
+```
+
+En segundo lugar, esto que se ha comentado se puede observar gráficamente. Se puede ver que **COMPLETAR MATEO POR FAVOR. FALTA DECIR ENTRE QUÉ FACTORES HAY ASOCIACIÓN**. **GRACIAS**.
+
+```{r, fig.align = 'center', fig.height = 10, fig.width = 10}
+# Gráfico desviaciones
+plot(simplemod.empleados.formaj.res, 
+     panel = mosaic, 
+     main = "Modelo independencia", 
+     residuals_type = c("deviance"), 
+     gp = shading_hcl, 
+     gp_args = list(interpolate = c(0, 1)))
+```
+
+\newpage
+
+# 7. Tabla de contingencia de cuatro dimensiones
+
+En esta sección se ha seleccionado los factores RENFIN (rentabilidad financiera) y RES (resultado de explotación) que, junto a los factores FORMAJ (forma jurídica) y EMPLEADOS (dimensión por número de empleados), nos permitirán construir una **tabla de contingencia de cuatro dimensiones** y caracterizarla.
+
+```{r}
+# Data frame con los datos de interés
+muestra.empleados.formaj.renfin.res <- bodegueras %>% 
+  dplyr::select(EMPLEADOS, FORMAJ, RENFIN, RES)
+
+# Creación de la tabla
+tab.empleados.formaj.renfin.res <- table(muestra.empleados.formaj.renfin.res)
+```
+
+En segundo lugar, esto que se ha comentado se puede observar gráficamente. Se puede ver que **COMPLETAR MATEO POR FAVOR. FALTA DECIR ENTRE QUÉ FACTORES HAY ASOCIACIÓN**. **INTERPRETAR E INVESTIGAR SIFNIDICADO DE LOS PUNTOS TIPO "BOXPLOT" Y SU SENTIDO** **GRACIAS**.
+
+```{r, fig.align = 'center', fig.height = 10, fig.width = 15}
+# Gráfico de desviaciones
+mosaic(tab.empleados.formaj.renfin.res, main = " EMPLEADOS VS FORMA JURÍDICAVS RENFIN VS RESULTADO", 
+       shade=T, 
+       gp= shading_Marimekko(tab.empleados.formaj.renfin.res))
+```
+
+\newpage
+
+# 8. Modelo log-lineal representativo
+
+En este último aparatado se va a seleccionar qué modelo log-lineal representa mejor la estructura de  frecuencias de la tabla de contingencia del apartado 7 (`RENFIN`, `RES`, `FORMAJ` y `EMPLEADOS`), excluyendo  al modelo saturado.
+
+```{r}
+# Creación del data frame para poder crear el modelo 3
+muestra.empleados.renfin.res <- bodegueras %>% 
+  dplyr::select(EMPLEADOS, RENFIN, RES)
+
+tab.empleados.renfin.res <- table(muestra.empleados.renfin.res)
+```
+
+## 8.1. Modelo 1
+
+Abcd Abcd Abcd **POR FAVOR MATEO, ¿LO PUEDES COMENTAR TU?. GRACIAS**
+
+```{r, comment = '', fig.align = 'center', fig.height = 10, fig.width = 15}
+# Modelo 1
+mod1 <- MASS::loglm(~ RES + EMPLEADOS, FORMAJ, RENFIN, 
+                    data= tab.empleados.formaj.renfin.res)
+mod1
+
+plot(mod1, 
+     panel = mosaic, 
+     main = "Modelo 1", 
+     residuals_type = c("deviance"), 
+     gp = shading_hcl, 
+     gp_args = list(interpolate = c(0, 1)))
+```
+
+## 8.2. Modelo 2
+
+Abcd Abcd Abcd **POR FAVOR MATEO, ¿LO PUEDES COMENTAR TU?. GRACIAS**
+
+```{r, comment = '', fig.align = 'center', fig.height = 10, fig.width = 15}
+# Modelo 2
+mod2 <- MASS::loglm(~ RES + EMPLEADOS, FORMAJ, 
+                    data= tab.empleados.formaj.res)
+mod2
+
+plot(mod2, 
+     panel = mosaic, 
+     main = "Modelo 2", 
+     residuals_type = c("deviance"), 
+     gp = shading_hcl, 
+     gp_args = list(interpolate = c(0, 1)))
+```
+
+## 8.3. Modelo 3
+
+Abcd Abcd Abcd **POR FAVOR MATEO, ¿LO PUEDES COMENTAR TU?. GRACIAS**
+
+```{r, comment = '', fig.align = 'center', fig.height = 10, fig.width = 15}
+# Modelo 3
+mod3 <- MASS::loglm(~ RES + EMPLEADOS, RENFIN, 
+                    data= tab.empleados.renfin.res)
+mod3
+
+plot(mod3, 
+     panel = mosaic, 
+     main = "Modelo 3", 
+     residuals_type = c("deviance"), 
+     gp = shading_hcl, 
+     gp_args = list(interpolate = c(0, 1)))
+```
+
+## 8.4. Conclusiones sobre los 3 modelos 
+
+Abcd Abcd Abcd **POR FAVOR MATEO, ¿LO PUEDES COMENTAR TU?. GRACIAS**
+
+```{r, comment = ''}
+sum(mod1$deviance)
+
+sum(mod2$deviance)
+
+sum(mod3$deviance)
+```
+
+\newpage
+
+# Referencias bibliográficas
+
+<div id="refs"></div>
+
+\newpage
+
+# Anexos
+
+## Anexo 1. Código (_script_) utilizado
+
+A continuación se presenta el _script_ utilizado para desarrollar el informe.
+
+```{r, echo = FALSE, comment= '', width = 10}
+script <- readLines("TMAAS_05.Rmd")
+print(script)
+```
+
+\newpage
+
+## Anexo 2. Datos de la sesión
+
+En esta sección se recogen los datos de la sesión utilizada para elaborar este informe. Siguiendo a @Cano2021, es fundamental observar la versión de R, así como las versiones de los paquetes bajo los cuales se ha ejecutado el código o _script_.
+
+```{r, echo = FALSE, comment = ''}
+sessionInfo()
+```

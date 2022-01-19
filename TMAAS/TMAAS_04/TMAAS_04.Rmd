@@ -1,0 +1,575 @@
+---
+title: "Ejercicio Evaluable Tema IV. Modelo de Regresión Múltiple (corte transversal)"
+author: "Bermann, M.A. & Pérez, R.S."
+lang: es
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+header-includes:
+- \usepackage{fancyhdr}
+- \pagestyle{fancy}
+- \fancyfoot[CO,CE]{Grupo 03 - TMAAS - MUMADE}
+- \fancyfoot[LE,RO]{\thepage}
+- \usepackage{titling}
+- \pretitle{\begin{center}
+    \includegraphics[width=2in,height=2in]{logo_color.png}\LARGE\\}
+- \posttitle{\end{center}}
+documentclass: article
+bibliography: library.bib
+output:
+  pdf_document:
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+# Ajustes iniciales de los chunk
+knitr::opts_chunk$set(echo = F, warning = F, message = F)
+```
+
+```{r, include = FALSE}
+# Limpieza del entorno, activación de paquetes e importación de datos
+rm(list = ls())
+library(readxl)
+library(tidyr)
+library(dplyr)
+library(kableExtra)
+library(knitr)
+library(ggplot2)
+library(GGally)
+library(car)
+library(stargazer)
+library (lmtest)
+comercializadoras <- read_excel("tmaas_evalua_04.xlsx", sheet = "GRUPO_03")
+comercializadoras <- data.frame(comercializadoras, row.names = 1)
+```
+
+\newpage
+
+# Introducción
+
+En este informe[^1] se va a proceder a desarrollar las cuestiones planteadas en el ejercicio evaluable del Tema 4 correspondiente al programa de la asignatura Técnicas Multivariantes Aplicadas al Análisis Sectorial del Máster Universitario en Modelización y Análisis de Datos Económicos (MUMADE). Para ello se va a utilizar información sobre **empresas comercializadoras de textil** españolas con el objetivo final de poder responder a las cuestiones mencionadas.
+
+En un paso previo a comenzar el desarrollo de este informe es preciso **definir las variables**[^2] que forman parte de la base de datos de las ``r count(comercializadoras)`` empresas comercializadoras textiles iniciales con las que vamos a trabajar.
+
+```{r}
+# Creación de la tabla que define las variables
+
+definiciones <- read_excel("tmaas_evalua_04.xlsx", sheet = "Variables")
+
+# Eliminación de filas sin datos o que deben corregirse
+definiciones <- definiciones[-c(8,17,18), ]
+
+# Creación del data.frame que incorporará la nueva fila
+solvencia <- data.frame("SOLVENCIA", "Coeficiente de solvencia (%) Últ. año. disp.")
+
+# Descripción de los datos incorporados en la nueva fila
+names(solvencia) <- c("Variable", "Descripción")
+
+# Incorporación de la nueva fila
+definiciones <- rbind(definiciones, solvencia)
+
+# Creación de una tabla
+definiciones %>% 
+  kable(booktabs = TRUE, 
+        format = "latex",
+        caption = "Definición de variables") %>%
+  kable_styling(font_size = 8,
+                latex_options = c("striped", "condensed", "hold_position"), 
+                position = "center", 
+                full_width = FALSE) %>% 
+  column_spec(1, bold = T, color = "black") %>% 
+  column_spec(2, width = "30em")
+```
+
+Los datos a utilizar en este informe se basan en información que puede ser extraída de la base de datos Sabi, la cual contiene datos sobre empresas de España y Portugal [@BVD2021], habiéndose personalizado dichos datos en la hoja de Excel para el GRUPO_03[^3] y habiendo para este informe, tal y como se ha mencionado anteriormente, un total de ``r count(comercializadoras)`` empresas como muestra inicial a estudiar.
+
+[^1]: Para la elaboración de este informe se ha utilizado el software R, a través de su entorno RStudio y generándose la maquetación vía R Markdown. Se han utilizado numerosas fuentes para el maquetado a partir de ayudas de @Allaire2021, @Cano2021, @CRANR-Project2021, @DataCamp2021a, @Hlavac2018, @Keyes2019, @Kobi2010, @Luque2019, @Luque2019b, @VanHespen2016, @Xie2021, @Xie2021a y @Zhu2019.
+
+[^2]: Cabe decir que en el archivo original Microsoft&reg; Excel&reg; viene definida la variable `GCORP` en la hoja de "Variables", pero en la hoja de datos "GRUPO_03" no aparece como variable. En cambio sí aparece en dicha hoja "GRUPO_03" la variable `SOLVENCIA`. Es por ello por lo que se ha eliminado de la tabla de definición de variables `GCORP` y se ha incorporado `SOLVENCIA`. Por otro lado se ha procedido a transformar el formato de los valores para la variable `NCORP`en numéricos ya que la importación original los identifica como ``r typeof(comercializadoras$NCORP)``.
+
+[^3]: GRUPO_03 es el nombre de la hoja del libro de Excel asignada para el informe.
+
+```{r}
+# NCORP como variable numérica y no cualitativa
+
+comercializadoras$NCORP <- as.numeric(comercializadoras$NCORP)
+```
+
+A continuación se ha procedido a seleccionar la variable del resultado del ejercicio (`RES`) como variable métrica dependiente y total activo (`ACTIVO`), el endeudamiento (`ENDEUDA`), el número de empleados (`EMP`) y la forma jurídica (`FJUR`) como variables explicativas, donde una de ellas tiene carácter de factor (`FJUR`), con el **objetivo final de construir un modelo** donde el conjunto de explicativas sean un reflejo del comportamiento de la dependiente. Así, el modelo inicial planteado para trabajar es el siguiente:
+
+\begin{center}
+$RES = f(ACTIVO, ENDEUDA, EMP, FJUR)$
+\end{center}
+
+Los principales datos estadísticos de las variables explicativas seleccionadas son los siguientes:
+
+```{r}
+# Selección de las variables explicativas
+explicativas <- select(comercializadoras, ACTIVO, ENDEUDA, EMP, FJUR)
+
+# Creación de una tabla con las variables explicativas
+explicativas %>% 
+  summary() %>% 
+  kable(booktabs = TRUE, 
+        format = "latex",
+        caption = "Datos estadísticos de las variables explicativas seleccionadas",
+        digits = 2) %>%
+  kable_styling(font_size = 8,
+                latex_options = c("striped", "condensed", "hold_position"), 
+                position = "center", 
+                full_width = F) %>% 
+  row_spec(0, bold = T, color = "black")
+```
+
+Dichos datos nos revelan, de forma preliminar, que **van a existir _missing values_** para la variable del número de empleados (`EMP`), así como que la variable de la forma jurídica (`FJUR`) es de tipo factor al no arrojar datos estadísticos a diferencia de las demás variables seleccionadas.
+
+\newpage
+
+# 1. Análisis de posibles datos perdidos y casos atípicos en la muestra
+
+En este primer apartado se procederá a detectar y eliminar, en su caso, posibles _missing values_ y _outliers_ que pudieran distorsionar los resultados del análisis.
+
+## 1.1. Detección y tratamiento de _missing values_
+
+```{r, include = FALSE}
+# Nuevo vector para conservar el original de la muestra
+muestra_1 <- select(comercializadoras, everything())
+
+# Detección de missing values
+muestra_1 %>% 
+  filter(is.na(RES) | is.na(ACTIVO) | is.na(ENDEUDA) | is.na(EMP) | is.na(FJUR))
+```
+
+En primer lugar, el análisis de valores perdidos, tal y como habíamos adelantado en la introducción, nos ha arrojado `r muestra_1 %>% filter(is.na(RES) | is.na(ACTIVO) | is.na(ENDEUDA) | is.na(EMP) | is.na(FJUR)) %>% select(RES, RENECO, RENFIN, EMP, FJUR) %>% count()` _missing values_. Debido a la cantidad elevada que son se ha trasladado la información sobre los casos que representan dichos valores perdidos en el Anexo I.
+
+```{r, include = FALSE}
+# Eliminación de los _missing values_
+muestra_1_1 <- muestra_1 %>% filter(! is.na(RES) & ! is.na(ACTIVO) & ! is.na(ENDEUDA) & ! is.na(EMP) & ! is.na(FJUR))
+```
+
+Una vez eliminados los _missing values_ **la muestra ha pasado de ``r count(comercializadoras)`` observaciones a ``r count(muestra_1_1)``**.
+
+## 1.2. Detección y tratamiento de _outliers_
+
+Tras el análisis y eliminación de _missing values_ se va a proceder a determinar si existen outliers en la muestra. Siguiendo a @Tarancon2021, distinguiremos este análisis de datos atípicos según si se analiza la variable dependiente o las explicativas.
+
+### 1.2.1. _Outliers_ en la variable dependiente
+
+En primer lugar, para detectar si existen datos atípicos en la muestra para la variable dependiente, en este caso el resultado del ejercicio (`RES`), se recurrirá a un gráfico de dispersión que se muestra a continuación.
+
+```{r, fig.align = 'center', fig.height = 5, fig.width = 10}
+# Gráfico de dispersión para la detección de outliers
+muestra_1_1 %>% 
+  ggplot(aes(x = row.names(muestra_1_1), y = RES)) +
+  geom_point(size = 2, alpha = 0.8, colour = 'red4') +
+  xlab('Empresa') +
+  ylab('Resultado del ejercicio (mil EUR)') +
+  ggtitle('Resultado del ejercicio de las empresas comercializadoras textiles') +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, size = 6, hjust = 1, vjust = 1))
+```
+
+El gráfico de dispersión nos ha mostrado síntomas claros de que en la muestra existen posibles casos atípicos, por lo que se va a recurrir también al análisis gráfico _boxplot_ para corroborar las "sospechas" y ayudarnos a definir a partir de qué valor vamos a considerar estos casos como verdaderos _outliers_.
+
+```{r, fig.align = 'center', fig.height = 6, fig.width = 10}
+# Gráfico boxplot para la detección de outliers
+muestra_1_1 %>% 
+  ggplot(aes(y = RES)) +
+  geom_boxplot(alpha = 0.5, fill = "orange", color = "red4") +
+  ylab('Resultado del ejercicio (mil EUR)') +
+  ggtitle('Posibles outliers en el análisis del resultado del ejercicio de las empresas comercializadoras textiles') +
+  theme_minimal()
+```
+
+El análisis _boxplot_, junto al de la dispersión de frecuencias, nos confirman la **existencia clara de _outliers_**. Así, siguiendo un criterio gráfico de observación, se ha procedido a eliminar estos datos atípicos considerando aquellos que su Resultado del Ejercicio (`RES`) tiene un valor superior e inferior a 150 (mil EUR) y que se reflejan en el Cuadro 3.
+
+```{r}
+# Detección de outliers en la variable RES
+muestra_1_1 %>% 
+  filter(RES >= 150 | RES <= -150) %>% 
+  select(RES) %>% 
+  kable(booktabs = TRUE, 
+        format = "latex",
+        caption = "Casos atípicos omitidos en la muestra para la variable RES",
+        digits = 2) %>%
+  kable_styling(font_size = 7,
+                latex_options = c("striped", "condensed", "hold_position"), 
+                position = "center", 
+                full_width = F) %>% 
+  row_spec(0, bold = T, color = "black")
+
+# Eliminación de outliers en la variable RES
+muestra_1_2 <- muestra_1_1 %>% 
+  filter(RES < 150 & RES > -150)
+```
+
+### 1.2.2. _Outliers_ en las variables explicativas
+
+Tras el análisis de la variable dependiente, es también relevante determinar si existen casos atípicos en las variables explicativas, para lo que, al haber varias variables, se recurrirá al análisis de la _distancia de Mahalanobis_ que, siguiendo a @Tarancon2021, es como un _"resumen del comportamiento de cada caso en todas las variables explicativas conjuntamente"_. Recordemos que este análisis, por el momento, solo procede a las variables cuantitativas (`FJUR` es una variable de tipo factor), por lo que se aplicará a las variables explicativas `ACTIVO`, `ENDEUDA` y `EMP`.
+
+```{r, fig.align = 'center', fig.height = 5, fig.width = 10}
+# Creación del vector de la distancia de Mahalanobis
+muestra_1_2_distancias_maha <- mahalanobis(muestra_1_2[,c(9,14,15)],
+                                           center = colMeans(muestra_1_2[,c(9,14,15)]),
+                                           cov = cov(muestra_1_2[,c(9,14,15)]))
+
+# Gráfica de la distancia de Mahalanobis
+muestra_1_2 %>% 
+  ggplot(aes(x = row.names(muestra_1_2), y = muestra_1_2_distancias_maha)) +
+  geom_point(size = 2, alpha = 0.7, color = 'red4') +
+  xlab('Empresa') + 
+  ylab('Distancia de Mahalanobis') +
+  ggtitle('Detección de outliers por Mahalanobis') +
+  theme(axis.text.x = element_text(angle = 90, size = 6,hjust = 1, vjust = 1)) + 
+  theme_minimal()
+```
+
+El análisis nos arroja la posibilidad de que existan diversos _outliers_ para las 3 variables explicativas analizadas, hecho que se confirma, a continuación, con el análisis gráfico _boxplot_.
+
+```{r, fig.align = 'center', fig.height = 4, fig.width = 10}
+# Detectando outliers
+muestra_1_2 %>% 
+  ggplot(aes(y = muestra_1_2_distancias_maha)) +
+  geom_boxplot(alpha = 0.5, fill = "orange", color = "red4") +
+  ylab('Distancia de Mahalanobis') +
+  ggtitle('Posibles outliers para el análisis conjunto de variables explicativas') +
+  theme_minimal()
+```
+
+Siguiendo un criterio gráfico de observación, se ha procedido a **eliminar estos datos atípicos** considerando aquellos que tienen una distancia de _Mahalanobis_ superior a 20 y que se reflejan en la siguiente tabla.
+
+```{r}
+muestra_1_2 %>% 
+  filter(muestra_1_2_distancias_maha >= 20) %>% 
+  select(ACTIVO, ENDEUDA, EMP) %>% 
+  kable(booktabs = TRUE, 
+        format = "latex",
+        caption = "Casos atípicos omitidos en la muestra para las variables ACTIVO, ENDEUDA y EMP",
+        digits = 2) %>%
+  kable_styling(font_size = 8,
+                latex_options = c("striped", "condensed", "hold_position"), 
+                position = "center", 
+                full_width = F) %>% 
+  row_spec(0, bold = T, color = "black")
+
+# Eliminando los outliers
+muestra_1_3 <- muestra_1_2 %>%
+  filter(muestra_1_2_distancias_maha < 20)
+```
+
+### 1.2.3. Variable explicativa factor (`FJUR`)
+
+Previamente a seguir trabajando con el informe es necesario considerar que en la especificación del modelo de regresión múltiple se pretende incorporar la forma jurídica de la empresa (`FJUR`), que es una variable de tipo factor, como variable explicativa. Tal y como señala @Tarancon2021, es necesario que **R reconozca dicha variable como un "verdadero factor"**, el cual queda definido con las siguientes 2 categorías o niveles:
+
+```{r}
+# Transformando el data.frame en factor
+muestra_1_3$FJUR <- as.factor(muestra_1_3$FJUR)
+
+# Mostrando los niveles de la variable FJUR
+muestra_1_3$FJUR %>% 
+  levels() %>% 
+  kable(col.names = 'FJUR',
+        booktabs = TRUE, 
+        format = "latex",
+        caption = 'Tipos de formas jurídicas') %>%
+  kable_styling(font_size = 8,
+                latex_options = c("striped", "condensed", "hold_position"), 
+                position = "center", 
+                full_width = T) %>% 
+  row_spec(0, bold = T, color = "black")
+```
+
+\newpage
+
+# 2. Análisis de problemas de multicolinealidad
+
+En este segundo apartado, a través de las correlaciones entre las variables explicativas, se procederá a explicar razonadamente si hay alguna(s) variable(s) explicativa(s) que pudieran originar un problema de multicolinealidad en la estimación por mínimos cuadrados ordinarios (MCO) del modelo planteado.
+
+Hay que tener en cuenta que el análisis de posibles problemas de multicolinealidad es fundamental como paso previo a la especificación y estimación del modelo. Para ello se analizará si las correlaciones son altas.
+
+```{r, fig.align = 'center', fig.height = 5, fig.width = 10}
+# Selección de las variables del análisis de correlación
+muestra_1_3_cor <- muestra_1_3 %>%
+  select(ACTIVO, ENDEUDA, EMP, FJUR)
+
+# Análisis de correlación
+ggpairs(muestra_1_3_cor,
+        title = "Análisis de correlaciones",
+        mapping = aes(colour = ''))
+```
+
+Este análisis de correlaciones arroja que podría haber cierta correlación entre la variable del total de activo (`ACTIVO`) y la variable del número de empleado (`EMP`), aunque como no es superior o 0,5 (en valor absoluto), se considera mantenerla. Parece evidente que a mayor tamaño de la empresa, representada por un mayor número de empleados, el total del activo también lo sea y por tanto, exista este problema de colinealidad. También cabe mencionar los resultados del análisis gráfico de la variable de la forma jurídica (`FJUR`), los cuales no arrojan valores de correlación al ser una variable de tipo factor. Sin embargo, vemos gráficamente que la muestra representada por las _Sociedades anónimas_ es muy limitada como para trazar conclusiones y que, además, no presenta diferencias considerables respecto a las _Sociedades limitadas_.
+
+\newpage
+
+# 3. Análisis del modelo de regresión inicial de partida y mejora final
+
+En esta sección se realizará, si es posible, un proceso de mejora del modelo inicial y se comentará razonadamente el por qué se ha elegido el modelo final del proceso de mejora.
+
+## 3.1. Modelo inicial de partida
+
+Recordemos que el modelo inicial de partida planteado era el siguiente:
+
+\begin{center}
+$RES = f(ACTIVO, ENDEUDA, EMP, FJUR)$
+\end{center}
+
+Así, una vez especificado el modelo, su estimación, a través de **mínimos cuadrados ordinarios (MCO)**, arroja los siguientes resultados:
+
+```{r, comment = '', results= 'asis'}
+# Estimación del modelo inicial (ecua1)
+ecua1 <- lm (data = muestra_1_3, RES ~ ACTIVO + ENDEUDA + EMP + FJUR)
+ecua1 %>% 
+  stargazer(header = F,
+            title = "Estimación del modelo de partida (ecua1)")
+```
+
+Cabe comentar diversas cuestiones sobre dichos resultados:
+
+  + El valor del estadístico R^2^ ajustado (corregido) es muy bajo (0.086).
+  + Los parámetros estimados son estadísticamente significativos (`ACTIVO`, `ENDEUDA`, `EMP`) (no se rechaza la hipótesis nula de significación de los parámetros individuales) excepto los niveles del factor `FJUR`, aunque tiene significación a partir de un nivel de confianza entre el 5% y el 10%.
+  + Existe significación conjunta de los parámetros estimados, la cual se analiza observando el p-valor de la prueba de la F (no se rechaza la hipótesis nula de significación conjunta de los parámetros individuales).
+  + Los índices de inflación de la varianza (_vif_) arrojan resultados que no superan el umbral de 4: ``r ecua1 %>% vif()``.
+  + El criterio de información de Akaike (AIC) arroja el siguiente resultado: ``r ecua1 %>% AIC()``.
+  + Como el factor `FJUR` se incluye en la especificación, mediante tantas variables dicotómicas o _dummies_ como niveles o categorías existen, menos uno (en este caso menos la categoría _Sociedad anonima_), su resultado, siguiendo a @Tarancon2021, debe ser interpretado en relación con el nivel o categoría que falta (*Sociedad anonima*). La interpretación, por tanto, muestra que, el hecho de ser una empresa comercializadora textil con una forma jurídica de _Sociedad limitada_ significa que su resultado del ejercicio aumenta en ``r ecua1$coefficients[5]`` puntos respecto a una que tome como forma jurídica _Sociedad anónima_.
+
+## 3.2. Mejora del modelo inicial de partida
+
+Ante los resultados del modelo inicial, es de interés realizar una **especificación y estimación alternativa** que busque mejorar dicho modelo de partida. Para ello, considerando la posible correlación que podía existir entre las variables `ACTIVO` y `EMP`, se ha decidido suprimir dicha variable del total de activo (`ACTIVO`) e incorporar la variable del margen de beneficio (`MARGEN`)[^4].
+
+```{r, comment = '', results= 'asis'}
+# Eliminación de missing values en la nueva variable del modelo
+muestra_1_4 <- muestra_1_3 %>% filter(! is.na(MARGEN))
+
+# Estimación del segundo modelo
+ecua2 <- lm (data = muestra_1_4, RES ~ MARGEN + ENDEUDA + EMP + FJUR)
+ecua2 %>% 
+  stargazer(header = F,
+            title = "Estimación del modelo corregido (ecua2)")
+```
+
+[^4]: Cabe considerar que se ha procedido a eliminar los ``r muestra_1_3 %>% filter(is.na(MARGEN)) %>% count()`` _missing values_ existentes para la variable `MARGEN`.
+
+**Este modelo ha mejorado** en diferentes sentidos que se recogen a continuación:
+
+  + El valor del estadístico R^2^ ajustado (corregido) (0.151) sigue siendo bajo pero ha mejorado respecto al modelo anterior.
+  + Los parámetros estimados siguen estadísticamente significativos (`MARGEN`, `ENDEUDA`, `EMP`) (no se rechaza la hipótesis nula de significación de los parámetros individuales) excepto los niveles del factor `FJUR`.
+  + Sigue existiendo significación conjunta de los parámetros estimados, la cual se analiza observando el p-valor de la prueba de la F (no se rechaza la hipótesis nula de significación conjunta de los parámetros individuales).
+  + Los índices de inflación de la varianza (_vif_) siguen arrojando resultados que no superan el umbral de 4: ``r ecua2 %>% vif()``.
+  + El criterio de información de Akaike (AIC) ha disminuido respecto al del anterior caso, arrojando ahora el siguiente resultado: ``r ecua2 %>% AIC()``.
+  + El hecho de ser una empresa comercializadora textil con una forma jurídica de _Sociedad limitada_ significa que su resultado del ejercicio aumenta en ``r ecua2$coefficients[5]`` puntos respecto a una que tome como forma jurídica _Sociedad anónima_.
+
+Así, el modelo final con el que se trabajará queda definidio de la siguiente forma:
+
+\begin{center}
+$RES = f(MARGEN, ENDEUDA, EMP, FJUR)$
+\end{center}
+
+\newpage
+
+# 4. Análisis gráfico
+
+A continuación, se va a construir el gráfico variable dependiente real/estimada y el gráfico de los residuos del modelo final estimado, comentándolos sucintamente.
+
+En primer lugar, el gráfico variable dependiente real/estimada permite comparar las predicciones del modelo estimado (`ecua2`) sobre la variable dependiente (`RES`) respecto a los valores reales.
+
+```{r, fig.align = 'center', fig.height = 5, fig.width = 10}
+# Creación del vector con las preddiciones
+numcasos <- nrow(muestra_1_4)
+ORDEN <- (c(1:217))
+resultados2 <-data.frame(RES_predic2 = ecua2$fitted.values,
+                         residuos2 = ecua2$residuals,
+                         RES = muestra_1_4$RES,
+                         ORDEN = c(1:217))
+
+# Gráfico realidad vs. predicción
+muestra_1_4 %>% 
+  ggplot() +
+  geom_point(aes(x = ORDEN, y = ecua2$fitted.values),
+             size = 2, alpha = 0.7, color = "red4") + 
+  geom_point(aes(x = ORDEN, y = muestra_1_4$RES),
+             size = 2, alpha = 0.7, color = "orange") + 
+  ggtitle("Valores reales (rojo) frente a las predicciones (naranja) para el Resultado del Ejercicio") + 
+  xlab('Casos') + 
+  ylab('Resultado del ejercicio: real y predicción') + 
+  theme(axis.text.x = element_text(angle = 90, 
+                                   size = 6,
+                                   hjust = 1, 
+                                   vjust = 1)) + 
+  theme_minimal()
+```
+
+Como se puede observar **las predicciones frente a los valores reales tienen cierta similitud**, aunque existen muchas predicciones dispersas respecto a la realidad, lo que puede deberse a las diferentes circunstancias señaladas anteriormente (por ejemplo, recordemos que el R^2^ ajustado es de tan solo 0.151).
+
+Respecto al gráfico de los residuos este se puede observar a continuación.
+
+```{r, fig.align = 'center', fig.height = 5, fig.width = 10}
+# Gráfico de residuos
+muestra_1_4 %>% 
+  ggplot(aes(x = ORDEN, y = ecua2$residuals)) +
+  geom_point(size = 2, 
+             alpha= 0.7, 
+             color = "orange") +
+  geom_smooth(color = "red4") +
+  geom_hline(yintercept = 0, 
+             color = "red4")+
+  ggtitle("Residuos")+
+  xlab('Casos') +
+  ylab('Residuos') +
+  theme_minimal()
+```
+
+\newpage
+
+# 5. Contraste: forma funcional
+
+En este quinto apartado se procederá al contraste, en el modelo final (`ecua2`), del cumplimiento de la **hipótesis de forma funcional** correcta de las relaciones planteadas en el modelo.
+
+Para ello se recurrirá a la prueba de _Ramsey-RESET_, cuyo resultado rechaza la hipótesis nula de forma funcional correcta (p-valor menor que 0.05).
+
+```{r, comment = ''}
+# Prueba de Ramsey-RESET
+ecua2 %>% 
+  resettest(data = muestra_1_4)
+```
+
+\newpage
+
+# 6. Contraste: normalidad del vector de perturbaciones aleatorias
+
+A continuación se procederá a contrastar, en el modelo final (`ecua2`), el cumplimiento de la hipótesis de normalidad del vector de perturbaciones aleatorias.
+
+Para realizar este contraste, y siguiendo a @Tarancon2021, se va a proceder a trabajar con los residuos del modelo (`ecua2`), considerados como estimaciones de dichas perturbaciones. 
+
+## 6.1. Análisis gráfico de la normalidad
+
+Para determinar si la distribución de los residuos sigue una _ley Normal_, se recurre, en primer lugar, al gráfico _qq_ (*cuantil-cuantil*), el cual compara los cuantiles teóricos que tiene una distribución normal con los que tienen la distribución de nuestra variable. 
+
+```{r, fig.align = 'center', fig.height = 5, fig.width = 10}
+# Contraste de normalidad: gráfico qq
+resultados2 %>% 
+  ggplot(aes(sample = residuos2)) +
+  stat_qq(size = 2,
+          alpha= 0.7, 
+          color = "orange") + 
+  stat_qq_line( color = "red4") + 
+  ggtitle('QQ plot de los residuos del modelo') + 
+  theme_minimal()
+```
+
+El gráfico _qq_ nos muestra una considerable separación de los puntos que se encuentran en los extremos respecto a los de la línea diagonal, lo que es síntoma de "no normalidad". De forma complementaria, un gráfico analítico de la normalidad es el de las densidades, donde se compara la función de densidad empírica de los residuos con la de la distribución normal con la misma media y desviación típica.
+
+```{r, fig.align = 'center', fig.height = 5, fig.width = 10}
+# Contraste de normalidad: gráfico de densidad
+resultados2 %>% 
+  ggplot(aes(residuos2)) +
+  geom_density(alpha = 0.7, 
+               fill = "orange",
+               size = 0.7,
+               color = "grey4") +
+  ggtitle('Gráfico de densidad de los residuos') +
+  stat_function(fun = dnorm,
+                color="red4",
+                args = list(mean = mean(resultados2$residuos2), 
+                            sd = sd(resultados2$residuos2))) +
+  theme_minimal()
+```
+
+Parece que el gráfico muestra que la función de densidad empírica de los residuos es similar a la distribución normal (campana centrada en 0), pero junto al análisis anterior y a la excesiva función apuntada que observamos será necesario recurrir a un contraste más específico.
+
+## 6.2. Contraste con _Shapiro-Wilk_
+
+El contraste de _Shapiro-Wilk_ permite contrastar estadísticamente la hipótesis de normalidad. Este, como a continuación se observa, nos confirma la *no existencia de normalidad* (p-valor menor que 0.05), al rechazar la hipótesis nula de normalidad en las perturbaciones aleatorias.
+
+```{r, comment = ''}
+# Test de Shapiro-Wilk
+shapiro.test(x = resultados2$residuos2)
+```
+
+Siguiendo a @Tarancon2021, la no existencia de un comportamiento normal afecta a la eficiencia de los estimadores MCO, es decir, son menos precisos (mayor varianza) (es necesario que contemos con estimadores insesgados, eficientes y consistentes, es decir, ELIO)
+
+\newpage
+
+# 7. Contraste: homocedasticidad del vector de perturbaciones aleatorias
+
+Como último análisis de contraste, en este séptimo apartado, se va a contrastar, en el modelo final, el cumplimiento de la hipótesis de homoscedasticidad del vector de perturbaciones aleatorias.
+
+Para ello, se va a recurrir al contraste de _Breush-Pagan_ y de _Goldfeld-Quandt_.
+
+```{r, comment = ''}
+# Test de Breush-Pagan y Goldfeld-Quandt
+bptest(ecua2)
+gqtest(ecua2)
+```
+
+En primer lugar, el test de _Breush-Pagan_, nos lleva a no rechazar la hipótesis nula de homoscedasticidad, cuestión que es totalmente contraria al resultado del test de _Goldfeld-Quandt_, el cual arroja un p-valor inferior a 0.05 y que, por tanto, rechaza la hipótesis nula de homocedasticidad, y está indicando, con ello, heterocedasticidad. Este resultado contradictorio requiere que, de forma adicional, se siguiera mejorando el modelo y se pudiera trabajar finalmente con estimadores ELIO y con un modelo mucho más cercano a la realidad del que finalmente se ha desarrollado en este informe.
+
+\newpage
+
+# 8. Sentido económico del modelo final
+
+En este octavo, y último apartado, se procederá a interpretar el significado económico de los coeficientes obtenidos en el modelo final.
+
+  + El margen de beneficio (`MARGEN`) tendrá un estimador positivo, es decir, cuanto más margen de beneficio tenga la empresa mejor resultado obtendrá. Esto es corroborado por nuestro modelo, en el que el estimador es de ``r ecua2$coefficients[2]``.
+  + El endeudamiento de una empresa (`ENDEUDA`) al conllevar un pago de intereses, afectará de manera negativa al resultado del ejercicio. Esta relación seguramente no tendría relevancia si trabajásemos con el resultado de operaciones. El estimador es ``r ecua2$coefficients[3]``.
+  + El número de empleados (`EMP`) tiene dos efectos opuestos: por un lado, es un indicador del tamaño de la empresa y por tanto de su capacidad para obtener beneficios, y por otro, al presentar gastos de salarios mayores (costes salariales), reducen el resultado. En nuestro caso, al ser empresas pequeñas, las que tengan pocos empleados será debido a que los socios propietarios se encargan de buena parte del trabajo y, por lo tanto, obtengan su retribución como beneficios de la empresa, no como salario. Es la explicación más cercana al resultado del estimador, que es ``r ecua2$coefficients[4]``.
+  + Respecto a la forma jurídica (`FJUR`), esperábamos que las _Sociedades anónimas_ puediesen conseguir un crecimiento mayor debido a la flexibilidad que ofrecen, pero ya que a penas hay, el resultado no es relevante ni siquiera al 10%, por lo que no podemos confirmar ni desmentir el razonamiento económico que pueda existir detrás.
+
+\newpage
+
+# Referencias bibliográficas
+
+<div id="refs"></div>
+
+\newpage
+
+# Anexos
+
+## Anexo 1. Valores perdidos en la muestra inicial
+
+A continuación se presentan los datos de las empresas que contienen _missing values_ del total de la muestra de las ``r count(comercializadoras)`` empresas comercializadoras textiles inicialmente importadas para su análisis.
+
+```{r}
+#Valores perdidos de la muestra inicial
+muestra_1 %>% 
+  filter(is.na(RES) | is.na(ACTIVO) | is.na(ENDEUDA) | is.na(EMP) | is.na(FJUR)) %>% 
+  select(RES, ACTIVO, ENDEUDA, EMP, FJUR) %>% 
+  kable(booktabs = TRUE,
+        format = "latex",
+        digits = 2,
+        longtable=TRUE,
+        caption = "Localización de valores perdidos en las variables seleccionadas para el modelo de regresión múltiple") %>%  
+  kable_styling(font_size = 5,
+                latex_options = c("striped", 
+                                  "hold_position", 
+                                  "repeat_header", 
+                                  "consensed"), 
+                full_width = F,
+                position = "center",
+                repeat_header_text = "continuaci\\'on",
+                repeat_header_continued = "contin\\'ua en la siguiente p\\'agina")
+```
+
+\newpage
+
+## Anexo 2. Código (_script_) utilizado
+
+A continuación se presenta el _script_ utilizado para desarrollar el informe.
+
+```{r, echo = FALSE, comment= ''}
+script <- readLines("TMAAS_04.Rmd")
+print(script)
+```
+
+\newpage
+
+## Anexo 3. Datos de la sesión
+
+En esta sección se recogen los datos de la sesión utilizada para elaborar este informe. Siguiendo a @Cano2021, es fundamental observar la versión de R, así como las versiones de los paquetes bajo los cuales se ha ejecutado el código o _script_.
+
+```{r, echo = FALSE, comment = ''}
+sessionInfo()
+```
+
+```{r}
+purl(script, documentation = 2)
+```
+

@@ -1,0 +1,373 @@
+---
+title: "Análisis clúster aplicado a la situación del emprendimiento y la libertad económica en Europa"
+author:
+- Pérez, R.S.^[Rafael Sergio Pérez Pujol, UCLM, RafaelSergio.Perez@alu.uclm.es]
+- Bermann, M.A.^[Mateo Alberto Bermann Albalat, UCLM, MateoAlberto.Bermann@alu.uclm.es]
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  pdf_document:
+    toc: yes
+  html_document:
+    toc: yes
+    df_print: paged
+header-includes:
+- \usepackage{fancyhdr}
+- \pagestyle{fancy}
+- \fancyfoot[CO,CE]{TAEDE - MUMADE}
+- \fancyfoot[LE,RO]{\thepage}
+- \usepackage{titling}
+- \pretitle{\begin{center} \includegraphics[width=4in,height=4in]{logo_color.png}\LARGE\\}
+- \posttitle{\end{center}}
+documentclass: report
+bibliography: library.bib
+lang: es
+---
+
+```{r, echo = FALSE, include = FALSE}
+# Aviso: si existen errores al compilar puede deberse a:
+
+# 1. Necesidad de incorporar el package "tinytex" [install.packages("tinytex); tinytex::install_tinytex()]
+# 2. Necesidad de instalar LaTeX - MiKTeX (https://miktex.org/download)
+# 3. Posibles problemas de compilado: seguir pasos en https://yihui.org/tinytex/r/#debugging
+```
+
+```{r setup, include=FALSE}
+# Ajustes iniciales de los chunk
+knitr::opts_chunk$set(echo = F, 
+                      warning = F, 
+                      message = F)
+```
+
+```{r, include = FALSE}
+# Limpieza del entorno
+rm(list = ls())
+
+# Instalación de paquetes no instalados
+packages <- c("readxl", "tidyr", "dplyr", "kableExtra", 
+              "knitr", "ggplot2", "GGally", "car", 
+              "stargazer", "lmtest", "factoextra",
+              "igraph", "cluster")
+
+installed_packages <- packages %in% rownames(installed.packages())
+if (any(installed_packages == FALSE)) {
+  install.packages(packages[!installed_packages])
+}
+
+# Activación de paquetes
+library(readxl)
+library(tidyr)
+library(dplyr)
+library(kableExtra)
+library(knitr)
+library(ggplot2)
+library(GGally)
+library(car)
+library(factoextra)
+library(pheatmap)
+library(igraph)
+library(cluster)
+library (lmtest)
+
+# Importación de datos
+datos_cluster_originales <- read_excel("TMAAS_02_database.xlsx", 
+                            sheet = "database")
+datos_cluster_originales <- data.frame(datos_cluster_originales, 
+                            row.names = 1)
+```
+
+# Resumen
+
+El emprendimiento (*entrepreneurship*) es uno de los fenómenos y/o procesos que mayor auge e interés ha despertado en las últimas décadas en la economía de los países. Este hecho ha adquirido mayor importancia con la llegada de las distintas crisis económicas, entre ellas la crisis financiera del 2008 o la de la Covid-19, especialmente por ser una posibilidad de salida frente a la caída de los beneficios de las grandes empresas que impulsan a la población a iniciar nuevos negocios o a incorporarse en un proceso de emprendimiento naciente. Es por ello por lo que, en el marco del Máster Universitario en Modelización y Análisis de Datos Económicos, y en concreto en el área de Técnicas Multivariantes Aplicadas al Análisis Sectorial, se va a plantear el desarrollo de un informe[^1], basado en análisis clúster, sobre la situación del emprendimiento por grupos con comportamientos similares, relacionada con la libertad económica, para el caso de países de la zona geográfica de Europa.
+
+[^1]: Este informe ha sido realizado con el software R, a través del entorno RStudio y se ha maquetado, mediante R Markdown, a partir de las ayudas de libros, artículos y clases de @Allaire2021, @AprendeR2021, @Casero2021, @Cano2021, @CRANR-Project2021, @DataCamp2021a, @Hlavac2018, @Keyes2019, @Kobi2010, @Luque2019, @Luque2019b, @Tarancon2021, @VanHespen2016, @Xie2021, @Xie2021a y @Zhu2019. También se ha tenido que recurrir a la instalación de MiKTeX (<https://miktex.org/>). Los datos se han importado de un archivo Microsoft&reg; Excel&reg;.
+
+# 1. Introducción
+
+La actividad de los empresarios ha venido siendo analizada a lo largo de la historia del pensamiento económico por diversos autores, pero es con Schumpeter con quien el ámbito de la empresarialidad, en especial del emprendimiento, adquiere un valor de relevancia en relación a sus efectos sobre los mejores niveles de crecimiento económico [@Fernandez2011]. En última instancia, tal y como señala @Holcombe1999, una mejor situación del emprendimiento en los países favorece mejores niveles de inversión y de empleo, y por ende, de crecimiento económico. Esta relación, la del emprendimiento y el crecimiento económico, y su sentido positivo, ha sido analizada por numerosos investigadores y autores de referencia [@Bosma2018; @Nissan2012; @Galindo2014; @Minniti2012; por ejemplo], y otros lo han relacionado con la necesidad de una mejor situación de la libertad económica y las instituciones favorecen las relaciones descritas anteriormente [@Baumol1990; @Harper1998; @Ridley2021; por ejemplo]. Por otra parte, el informe anual que realiza la GERA, el Global Entreprenurship Monitor (GEM), ha demostrado que existen diferencias notables en estas relaciones en función de las zonas geográficas analizadas [@Bosma2020].
+
+Es por ello por lo que el **objetivo principal** de este informe pasa por determinar si existen grupos de países que tengan una caracterización particular similar entre ellos dentro de Europa, teniendo en cuenta la situación del emprendimiento y la libertad económica y caracterización institucional, recurriendo, para ello, al análisis de conglomerados o clúster que, siguiendo a @Fernandez2021, se basa en una _"técnica estadística que trata de agupar elementos (en nuestro caso países), que vendrán clasificados por un determinado número de características (en nuestro caso el nivel de emprendimiento, de riqueza económica y de libertad económica), en grupos mutuamente excluyentes de tal forma que los elementos de un mismo grupo sean lo más parecidos posible entre sí y lo más diferentes posible respecto de los pertenecientes a otros grupos"_.
+
+Para conseguir el objetivo final se ha recurrido a tres bases de datos diferenciadas [^2], extrayendo datos para el período 2010 - 2020 (n = 11), 20 observaciones a través de países (Austria, Croatia, France, Germany, Greece, Italy, Ireland, Latvia, Netherlands, North Macedonia, Norway, Poland, Portugal, Russia, Slovakia, Slovenia, Spain, Sweden, Switzerland, United Kingdom) e incorporándolos a un archivo Microsoft&reg; Excel&reg; y tratándolos de la forma adecuada en R para poder trabajar con ellos posteriormente en la elaboración de este informe. Así, las características de las variables utilizadas son las siguientes:
+
+  + *Global Entrepreneurship Monitor* (GEM): el panel de emprendimiento mundial es un estudio elaborado por la GERA que se realiza anualmente y que obtiene indicadores sobre la situación del emprendimiento de diferentes países del mundo. Recurriendo a la encuesta de comportamiento y actitudes emprendedoras, se han extraído, fundamentalmente, dos variables.
+    + Intenciones emprendedoras (**EI**) (0-100): representa el porcentaje de la población de 18 a 64 años (excluidas las personas involucradas en cualquier etapa de la actividad empresarial) que son empresarios latentes y que tienen la intención de iniciar un negocio en un plazo de tres años.
+    + Tasa de Actividad Emprendedora (**TEA**) (0-100): porcentaje de la población de 18 a 64 años que es un empresario incipiente o propietario-administrador de una nueva empresa.
+  + *World Development Indicators*: es la base de indicadores de desarrollo mundial que elabora el Banco Mundial a partir de diferentes fuentes de organismos oficiales internacionalmente reconocidos. De dicha base de datos se ha extraído una única variable.
+    + Producto Interior Bruto per cápita (**GDPPC**) (current US$): producto interno bruto dividido por la población a mitad de año. Tengamos en cuenta que el PIB es la suma del valor agregado bruto de todos los productores residentes en la economía más los impuestos sobre los productos y menos las subvenciones no incluidas en el valor de los productos. Se calcula sin hacer deducciones por depreciación de activos fabricados o por agotamiento y degradación de recursos naturales. Los datos están en dólares estadounidenses actuales.
+  + *Index of Economic Freedom*: es un panel de datos global elaborado por la _Heritage Foundation_ y que estudia en qué medida aspectos como el estado de derecho, el tamaño de los gobiernos, la eficiencia en la regulación y la apertura de los mercados contribuyen a mejores niveles de libertad económica. De esta base de datos se han extraído 9 indicadores.
+    + Índice de Libertad Económica (**IEF**) (0 - 100): es el índice general de la base de datos.
+    + Derechos de propiedad (**PR**)(0 - 100): variable institucional y de libertad económica 
+    + Integridad del gobierno (**GI**)(0 - 100): variable institucional.
+    + Carga fiscal (**TB**)(0 - 100): variable de libertad económica.
+    + Gasto del gobierno (**GS**)(0 - 100): variable de libertad económica.
+    + Libertad laboral (**LF**)(0 - 100): variable de libertad económica.
+    + Libertad monetaria (**MF**)(0 - 100): variable de libertad económica.
+    + Libertad de inversión (**IF**)(0 - 100): variable de libertad económica.
+    + Libertad financiera (**FF**)(0 - 100): variable de libertad económica.
+
+[^2]: Las fuentes de las bases de datos son @BancoMundial2021, @TheHeritageFoundation2021 y @GEM2021.
+
+Podemos ver de forma preliminar los datos de las 6 primeras observaciones (datos completos en el Anexo 2):
+
+```{r}
+datos_cluster_originales %>% 
+  head() %>%  
+  kable(booktabs = TRUE, 
+        format = "latex",
+        caption = "Vista inicial de los datos de las 6 primeras observaciones",
+        digits = 1) %>%
+  kable_styling(font_size = 8,
+                latex_options = c("striped", 
+                                  "condensed", 
+                                  "hold_position"),
+                position = "center", 
+                full_width = F) %>% 
+  row_spec(0, bold = T, color = "black")
+```
+
+Así, el objetivo final del informe, pasa por determinar países con características similares, se alcanzará analizando, en primer lugar, la similitud entre las observaciones consideradas en la investigación, lo que permitirá posteriormente determinar qué técnica de agrupación de las observaciones se llevará a cabo.
+
+```{r}
+# Estandarización de variables
+datos_cluster <- scale(datos_cluster_originales)
+```
+
+
+# 2. Análisis de similitudes entre los países
+
+Una vez analizado el contexto de la investigación, y propuesto el objetivo, es fundamental determinar en qué medida son similares o no los países de la muestra de países escogida, en el marco del ámbito analizado (emprendimiento). Para ello, se va a proceder a calcular la **matriz de distancias euclídeas** [^3], medida a través de la raiz del sumatorio de las distancias al cuadrado:
+
+[^3]: Se ha procedido a estandarizar las variables para evitar problemas por mayores variabilidades de determinadas variables, siguiendo la recomendación de @Fernandez2021.
+
+$d_e=(x_i,x_j)= \sqrt{\sum (x_{ik}-x_{jk})^2}$
+
+
+```{r}
+# Cálculo de las distancias euclídeas
+distancias_e <- dist(datos_cluster, 
+                     method = "euclidean")
+
+as.matrix(distancias_e)[1:10, 1:10] %>% 
+  kable(booktabs = TRUE, 
+        format = "latex",
+        caption = "Distancias euclídeas de las 10 primeras observaciones",
+        digits = 1) %>%
+  kable_styling(font_size = 8,
+                latex_options = c("striped", 
+                                  "condensed", 
+                                  "hold_position"), 
+                position = "center", 
+                full_width = F) %>% 
+  row_spec(0, bold = T, 
+           color = "black")
+```
+
+Esta misma información mostrada en la tabla, puede visualizarse mediante un mapa de calor o _heatmap_ a través de la librería `pheatmap()`, donde se puede observar, de forma preliminar, que Rusia (RUS) podría posicionarse como un dato atípico u _outlier_ y donde ya se podrían, a partir de las variables analizadas, visualizar ciertos grupos de países con comportamientos conjuntamente similares entre sí que permitan agruparlos. Vemos que el segundo grupo es el que menos correlacionado está, ya que sus colores son significativamente menos claros.
+
+```{r, fig.align = 'center', fig.width = 10, fig.height = 5}
+#Heatmap de las distancias euclídeas con la libreria pheatmap()
+pheatmap(mat = datos_cluster, 
+         scale = "none", 
+         clústering_distance_rows = "euclidean",
+         clústering_distance_cols = "euclidean", 
+         clústering_method = "average",
+         cutree_rows = 4, 
+         fontsize = 6)
+```
+
+De la misma forma, se puede representar otro mapa de calor a través de la librería `factoextra()`, donde se corrobora, de igual forma, la información anteriormente comentada y gracias al hecho de que se presentan las distancias euclídeas a la vez, podemos diferenciar entre un conjunto de países representados en azul claro y otro en tonos anaranjados, con lo que podemos empezar a distinguir una posible agrupación de entre dos países, quedando Rusia (RUS) muy alejada del resto con un azul muy intenso. 
+
+```{r, fig.align = 'center', fig.width = 10, fig.height = 5}
+# Heatmap de las distancias euclídeas con la librería factoextra()
+distancias_e <- get_dist(x = datos_cluster, 
+                         method = "euclidea")
+
+fviz_dist(dist.obj = distancias_e, 
+          lab_size = 12) +
+  theme(legend.position = "rigth")
+```
+
+# 3. Clúster jerárquico aglomerativo
+
+El análisis de distancias euclídeas, es decir, de la medida en la que existen similitudes o no entre los países, ha demostrado que, de forma preliminar, es posible agrupar los países por comportamientos distintos, y que, incluso, podría existir algún país que se presente como dato atípico. Por ello, en este tercer capítulo, se procederá a escoger una técnicas de agrupación para formar los conglomerados que establezcan los grupos de países clúster.
+
+En este informe se recurrira a las técnicas jerárquicas, las cuales, siguiendo a @Fernandez2021, _"forman los conglomerados agrupando los elementos en grupos cada vez más grandes o desagregando el conjunto de todos los elementos en conglomerados cada vez más pequeños"_. De forma específica, se va a utilizar una técnica jerárquica aglomerativa, donde el planteamiento se basa en partir de tantos conglomerados como elementos y se llega a un único conglomerado final [@Fernandez2021], aspecto último que no se realizará, pues el objetivo es ver si existen grupos distintos entre sí.
+
+Así, en primer lugar, podemos observar una comparación de los posibles clústers jerárquicos con la matriz de distancias euclídeas y los métodos de agrupación _single_, _complete_ y _average_.
+
+```{r, fig.align = 'center', fig.width = 10, fig.height = 4}
+# Comparación de clústers jerárquicos con la matriz de distancias euclídeas y distintos métodos de agrupación: single, complete y average
+single_hc <- hclust(distancias_e, 
+                    method = "single")
+complete_hc <- hclust(distancias_e, 
+                      method = "complete")
+layout(matrix(1:3, 
+              ncol = 3))
+
+# Gráficos
+plot(single_hc, 
+     main = "Single Linkage", 
+     sub = "", 
+     xlab = "", 
+     cex=0.8)
+
+plot(complete_hc, 
+     main = "Complete Linkage", 
+     sub = "", 
+     xlab = "", 
+     cex = 0.8)
+
+plot(distancias_e)
+```
+
+
+Estos, de forma preliminar, nos muestran posibles maneras de agrupar los países teniendo en cuenta las variables presentadas. Podemos observar gráficamente que están muy dispersos, y que Rusia (RUS) no se puede agrupar con ningún otro país.
+
+De la misma forma podemos observar la comparación entre los métodos de agrupación _single_ y _Ward_ [^4], este último, basado en un _"procedimiento jerárquico en el que el objetivo es minimizar la suma total de varianza intraclúster"_ [@Fernandez2021]. Podemos observar claramente cómo hay una serie de países que conforman un grupo, mayoritariamente de la zona medio norte de Europa (IRL, NOR, DEU, etc.), otro grupo que dominan los países del sur (PRT, GRC, ITA, etc.) y el país discordante que representa el posible _outlier_, Rusia (RUS).
+
+[^4]: _Ward's minimum variance_ $\rightarrow W =\sum\sum(x_{ig}-\overline{x}_g)'(x_{ig}-\overline{x}_g)$ [@Ward1963].
+
+```{r, fig.align = 'center', fig.width = 10, fig.height = 5}
+# Single
+plot(single_hc, 
+     main = "Single Linkage", 
+     sub = "", 
+     xlab = "", 
+     cex = 0.8)
+
+# WARD
+layout(matrix(1:2, 
+              ncol = 2))
+ward_hc <- hcut(datos_cluster, 
+                k = 3,
+                func_hc = "hclust", 
+                hc_metric = "euclidean", 
+                hc_method = "ward.D2")
+fviz_dend(ward_hc, 
+          cex = 0.5, 
+          k = 3, 
+          color_labels_by_k = TRUE)
+```
+
+El clúster jerárquico aglomerativo, a través del Método de Ward, también puede plantearse de forma más visual a través de la librería `igraph()`. En ella se puede observar con mejor claridad, gracias a la diferenciación de colores, que si los agrupásemos en tres clústers distintos, la siguiente separación afectaría al clúster azul, que se dividiría en dos grupos con un tamaño similar, no una rama pequeña como pasaría si hiciésemos cuatro, que los dos países de la izquierda formarían un clúster pequeño.
+
+```{r, fig.align = 'center', fig.width = 10, fig.height = 5}
+set.seed(123)
+fviz_dend(x = ward_hc, k = 3,
+          k_colors = c("#2E9FDF", 
+                       "red4", 
+                       "#E7B800", 
+                       "#FC4E07"),
+          color_labels_by_k = TRUE,
+          cex = 0.8,
+          type = "phylogenic",
+          repel = TRUE)
+```
+
+# 4. K-Means
+
+Una vez realizado el análisis mediante técnicas de agrupación jerárquicas, podemos plantear la realización del análisis clúster mediante técnicas no jerárquicas, las cuales se basan en seleccionar de forma previa los clústers a formar [@Fernandez2021]. Para determinar cuantos clústers se van a realizar, para posteriormente ejecutar un análisis k-means, se realizan diversos análisis.
+
+En primer lugar, el análisis de la explicación conjunta de los clúster, muestra que alrededor de 4, el cambio de tendencia inicial más claro, podría ser una elección óptima. Aun así, decidimos quedarnos con 3 clústers porque ya recogen en gran medida la explicación conjunta de todos los países, y cuanto menos clústers hayan, más significativo será este tipo de análisis.
+
+```{r, fig.align = 'center', fig.width = 10, fig.height = 5}
+fviz_nbclust(x = datos_cluster, 
+             FUNcluster = kmeans, 
+             method = "wss", 
+             k.max = 10,
+             diss = get_dist(datos_cluster, 
+                             method = "euclidean"), 
+             nstart = 50)
+```
+
+Por tanto, podemos plantear el análisis k-means, el cual muestra la coincidiencia con las técnicas jerárquicas, y es que hay una serie de países que muestra comportamientos similares, junto a otro gran grupo y el _outlier_ Rusia (RUS), que está tán alejada que precisa de un clúster propio. Se analizará a fondo en la siguiente sección.
+
+```{r, fig.align = 'center', fig.width = 10, fig.height = 5}
+fit <- kmeans(datos_cluster, 3)
+
+mydata2 <- data.frame(datos_cluster, 
+                      fit$cluster)
+
+clusplot(mydata2, fit$cluster, 
+         color = TRUE, 
+         shade = TRUE, 
+         main = "k-means", 
+         labels = 2, 
+         lines=0, 
+         cex.txt = 0.6, 
+         lwd = 2)
+```
+
+```{r, fig.align = 'center', fig.width = 10, fig.height = 5}
+set.seed(123)
+
+km.clusters <- kmeans(x = datos_cluster, 
+                      centers = 3, 
+                      nstart = 50)
+
+fviz_cluster(object = km.clusters, 
+             data = datos_cluster, 
+             show.clust.cent = TRUE,
+             ellipse.type = "euclid", 
+             star.plot = TRUE, 
+             repel = TRUE) +
+  labs(title = "Resultados clústering K-means") +
+  theme_bw() +
+  theme(legend.position = "none")
+```
+
+# 5. Conclusiones
+
+El emprendimiento es un ámbito que se ha demostrado relevante en el crecimiento y desarrollo económico por parte de distintos autores. Otros, lo han relacionado con un mejor escenario del nivel socioeconómico y de libertad económica en los países. Para profundizar en dicho análisis, se ha planteado una comparativa entre diferentes regiones europeas sobre la situación del emprendimiento y los ámbitos del nivel socieconómico y de variables de libertad económica e institucional, desarrollando dicho análisis mediante un análisis clúster.
+
+Así, para analizar correctamente los resultados de dicho análisis clúster, es necesario volver a las variables que forman el _data frame_: libertad económica y el nivel socioeconómico de la población. Se ha visto que Rusia (RUS) presenta resultados consistentemente distintos al resto en cuanto a niveles de corrupción, libertad económica y el resto de variables socioeconómicas, característica única en la muestra con lo que nos vamos a fijar mejor en los dos clústers. Estas variables han sido resumidas en una gracias al uso de distancias (euclídeas), de manera que al analizarlas, no podemos fijarnos en una en concreto para decir que un conjunto emprende más o menos, tiene un mayor producto interior bruto o libertad económica, sino todo a la vez. Esto limita las conclusiones que nuestro trabajo puede aportar, pero simplifica los resultados.
+
+De esta forma, los datos muestran que los del primer clúster, son países con una mejor situación y con un nivel de vida y de oportunidades de emprendimiento mayor. En base a eso, lo primero que llama la atención son las barreras geográficas: el primer grupo se acerca al norte y centro de Europa mientras que el segundo mira al sur. Observando los gráficos del apartado 4, se ha visto que hay países que se acercan, y de hecho algunos están en el segundo clúster en el apartado 3. Estos países son: Alemania, Noruega, España y Francia, las dos primeras del primer grupo y las dos últimas del segundo.
+
+# Referencias bibliográficas
+
+> La gestión de referencias bibliográficas se ha realizado a través del gestor bibliográfico Mendeley® y posteriormente se ha integrado en el documento R Markdown con las ayudas proporcionadas por @Ramos2021, @VanHespen2016 y @Vidal2011.  
+
+<div id="refs"></div>
+
+# Anexos
+
+## Anexo 1. Datos de la sesión
+
+En esta sección se recogen los datos de la sesión utilizada para elaborar este informe. Siguiendo a @Cano2021, es fundamental observar la versión de R, así como las versiones de los paquetes bajo los cuales se ha ejecutado el código o _script_.
+
+```{r, echo = FALSE, comment = ''}
+sessionInfo()
+```
+
+\newpage
+
+## Anexo 2. Base de datos
+
+A continuación se presentan los datos utilizados e importados para elaborar el informe.
+
+```{r, echo = FALSE, comment= ''}
+datos_cluster_originales %>% 
+  kable(booktabs = TRUE, 
+        format = "latex",
+        digits = 1) %>%
+  kable_styling(font_size = 8,
+                latex_options = c("striped", 
+                                  "condensed", 
+                                  "hold_position"), 
+                position = "center", 
+                full_width = F) %>% 
+  row_spec(0, bold = T, 
+           color = "black")
+```
+
+\newpage
+
+## Anexo 3. Código (_script_) utilizado
+
+A continuación se presenta el _script_ utilizado para desarrollar el informe.
+
+```{r, echo = FALSE, comment= ''}
+script <- readLines("TMAAS_02.Rmd")
+print(script)
+```

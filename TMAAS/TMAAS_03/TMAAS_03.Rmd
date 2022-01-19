@@ -1,0 +1,397 @@
+---
+title: "Análisis de componentes principales aplicado a un indicador de corporaciones tecnológicas"
+author:
+- Pérez, R.S.^[Rafael Sergio Pérez Pujol, UCLM, RafaelSergio.Perez@alu.uclm.es]
+- Bermann, M.A.^[Mateo Alberto Bermann Albalat, UCLM, MateoAlberto.Bermann@alu.uclm.es]
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  pdf_document:
+    toc: yes
+  html_document:
+    toc: yes
+    df_print: paged
+header-includes:
+- \usepackage{fancyhdr}
+- \pagestyle{fancy}
+- \fancyfoot[CO,CE]{TAEDE - MUMADE}
+- \fancyfoot[LE,RO]{\thepage}
+- \usepackage{titling}
+- \pretitle{\begin{center} \includegraphics[width=4in,height=4in]{logo_color.png}\LARGE\\}
+- \posttitle{\end{center}}
+documentclass: report
+bibliography: library.bib
+lang: es
+---
+
+```{r, echo = FALSE, include = FALSE}
+# Aviso: si existen errores al compilar puede deberse a:
+
+# 1. Necesidad de incorporar el package "tinytex" [install.packages("tinytex); tinytex::install_tinytex()]
+# 2. Necesidad de instalar LaTeX - MiKTeX (https://miktex.org/download)
+# 3. Posibles problemas de compilado: seguir pasos en https://yihui.org/tinytex/r/#debugging
+```
+
+```{r setup, include=FALSE}
+# Ajustes iniciales de los chunk
+knitr::opts_chunk$set(echo = F, 
+                      warning = F, 
+                      message = F)
+```
+
+```{r, include = FALSE}
+# Limpieza del entorno
+rm(list = ls())
+
+# Instalación de paquetes no instalados
+packages <- c("readxl", "tidyr", "dplyr", "kableExtra", 
+              "knitr", "ggplot2", "GGally", "ez", 
+              "corrplot", "aplpack", "PerformanceAnalytics",
+              "factoextra", "FactoMineR")
+
+installed_packages <- packages %in% rownames(installed.packages())
+if (any(installed_packages == FALSE)) {
+  install.packages(packages[!installed_packages])
+}
+
+# Activación de paquetes
+library(readxl)
+library(tidyr)
+library(dplyr)
+library(kableExtra)
+library(knitr)
+library(ggplot2)
+library(GGally)
+library(ez)
+library(corrplot)
+library(aplpack)
+library(PerformanceAnalytics)
+library(factoextra)
+library(FactoMineR)
+
+# Importación de datos
+datos_acp <- read_excel("TMAAS_3_database.xlsx", 
+                            sheet = "database")
+datos_acp <- data.frame(datos_acp, 
+                            row.names = 1)
+```
+
+# Resumen
+
+Las grandes corporaciones tecnológicas han sufrido un crecimiento exponencial en el siglo XXI que se ha visto impulsado en mayor medida por el auge cada vez más notable de los medios digitales y las nuevas plataformas y tendencias comunicativas y de ocio digital que protagonizan el actual escenario. Así, empresas como Apple, Google (Aplhabet) o Tesla han mejorado de forma considerable su posición en los mercados financieros en los últimos 15 años. Con ello, surgen indicadores que intentan recoger, de forma sectorial, los valores bursátiles para mejorar los mecanismos de reasignación de recursos financieros. Es por ello por lo que, en el marco del Máster Universitario en Modelización y Análisis de Datos Económicos, y en concreto en el área de Técnicas Multivariantes Aplicadas al Análisis Sectorial, se va a plantear el desarrollo de un informe [^1], basado en un análisis de componentes principales para emular el índice NASDAQ 100 (^NDX) a partir de diferentes valores cotizados del propio índice.
+
+[^1]: Este informe ha sido realizado con el software R, a través del entorno RStudio y se ha maquetado, mediante R Markdown, a partir de las ayudas de libros, artículos y clases de @Allaire2021, @AprendeR2021, @Casero2021, @Cano2021, @CRANR-Project2021, @DataCamp2021a, @Fernandez2021a, @Hlavac2018, @Keyes2019, @Kobi2010, @Luque2019, @Luque2019b, @Tarancon2021, @VanHespen2016, @Xie2021, @Xie2021a y @Zhu2019. También se ha tenido que recurrir a la instalación de MiKTeX (<https://miktex.org/>). Los datos se han importado de un archivo Microsoft&reg; Excel&reg;.
+
+# 1. Introducción
+
+A menudo, es fácil perderse en un mar de información financiera, y a veces acabamos con la sensación de que hay datos que complican el análisis en vez de dar información. En estos casos, nos interesa más la tendencia general que ir viendo datos empresa por empresa. Normalmente un índice, en sí mismo nos puede dar una ligera idea, pero sufre de varios problemas al ser un agregado, como el impacto de los _outliers_ o el hecho de que integre empresas que vayan a una dirección completamente distinta a la tendencia del mercado. 
+
+Es por ello por lo que, junto a esto, y en el marco del análisis ACP, el **objetivo principal** de este informe pasa por determinar si una componente tendría la capacidad de explicar la mayor parte del comportamiento de los valores cotizados seleccionados, todo ello a través de un análisis de componentes principales donde, siguiendo a @Fernandez2021a, dichas componentes se basan en _"combinaciones lineales de las originales y se derivan en orden de importancia, de tal manera que la primera componente principal recoge, de la variación total de los datos originales, la mayor parte posible, y así sucesivamente"_, y donde el objetivo es _"ver si unas pocas componentes recogen la mayor parte de la variación de los datos originales. Si es así, se puede argüir que la dimensionalidad del problema no es p sino inferior a p"_.
+
+Para conseguir el objetivo final se ha recurrido a la base de datos de @Yahoo2021, a través del portal Yahoo! Finance [^2], extrayendo datos para 10 valores cotizados del NASDAQ 100 y el propio índice NASDAQ 100. El período de observación incluye todo el año 2019 y se han obtenido los valores de los rendimientos diarios que se han trimestralizado.
+
+[^2]: La fuente de la base de datos es @Yahoo2021.
+
+En este punto, cabe decir que el análisis de componentes principales requiere que el conjunto de datos con el que se trabaja esté correlacionado, pues el objetivo final es reducir la dimensionalidad de los datos y simplificarlos. Para ello, se recurrirá a un análisis de correlaciones en el siguiente capítulo.
+
+Podemos ver de forma preliminar los datos de las 6 primeras observaciones (datos completos en el Anexo 2):
+
+```{r}
+datos_acp %>% 
+  head() %>%  
+  kable(booktabs = TRUE, 
+        format = "latex",
+        caption = "Vista inicial de los datos de las 6 primeras observaciones",
+        digits = 1) %>%
+  kable_styling(font_size = 8,
+                latex_options = c("striped", 
+                                  "condensed", 
+                                  "hold_position"),
+                position = "center", 
+                full_width = F) %>% 
+  row_spec(0, bold = T, color = "black")
+```
+
+# 2. Análisis de correlaciones
+
+Tal y como se ha comentado anteriormente, el análisis de componentes principales requiere unos valores de correlaciones elevados para el conjunto de datos analizados. Así, aplicando dicha premisa para el conjunto de datos utilizados para este informe, se puede obtener la matriz de correlaciones correspondiente:
+
+```{r}
+# Matriz de correlaciones
+datos_acp %>% 
+  cor() %>%  
+  kable(booktabs = TRUE, 
+        format = "latex",
+        caption = "Matriz de correlaciones valores e índice NASDAQ 100",
+        digits = 2) %>%
+  kable_styling(font_size = 8,
+                latex_options = c("striped", 
+                                  "condensed", 
+                                  "hold_position"),
+                position = "center", 
+                full_width = F) %>% 
+  row_spec(0, bold = T, color = "black")
+```
+
+Así mismo, dicho análisis puede plantearse de forma gráfica a través de distintas opciones. En primer lugar, si se grafican las correlaciones con la librería `ez()`, se puede observar que dichos valores son relativamente elevados, especialmente para los conjuntos de T1-T2, T1-T4, y T2-T4.
+
+```{r, fig.align = 'center', fig.width = 3, fig.height = 2}
+# Análisis de correlaciones con la librería ez()
+ezCor(datos_acp)
+```
+
+De la misma forma, podemos observar la misma información a través de un gráfico que muestra la matriz de correlaciones mediante la librería `corrplot()`, donde los colores más oscuros demuestran mayores niveles de correlación.
+
+```{r, fig.align = 'center', fig.width = 3, fig.height = 3}
+# Análisis de correlaciones con la librería corrplot()
+corrplot(cor(datos_acp), method="number", number.cex = .7)
+```
+
+# 3. Análisis descriptivo multivariante
+
+Una vez realizado el análisis de correlaciones de los datos, puede resultar de interés plantear un análisis descriptivo multivariante que nos muestre, en qué medida, puede haber similitudes entre los datos analizados.
+
+```{r, fig.align = 'center', fig.width = 10, fig.height = 6}
+# Visualización de datos con Chernoff
+faces(datos_acp, 
+      cex = 0.8, 
+      print.info = F, 
+      face.type = 1)
+```
+
+En esta línea, se puede recurrir a las caras de Chernoff, una técnica de visualización de datos planteada por @Chernoff1973, y basada en un _" método gráfico en el que ciertas características cuantitativas de un grupo, se asocian con datos físicos de la cara de una persona, con lo cual es posible realizar un dibuje que represente dichas características y realizar comparaciones"_ [@Fernandez2021a]. 
+
+Así, dicha técnica es reproducible a través de la librería `aplpack()`.
+
+Podemos observar, a través de dichas caras de Chernoff y para los datos analizados, que las mayores similitudes se encuentran entre los valores cotizados AAPL, COW, SBUX y MRVL. Por otra parte, KDP y MAR también podrían tener alguna similitud. La cara más discordante es la de la empresa norteamericana Tesla (TSLA), pues esto es debido a que es una empresa con unos rendimientos discordantes, especialmente en el cuatro trimestre en el que ha crecido más de un 50%, mientras que el resto tuvo unos rendimientos más moderados.
+
+# 4. Análisis de componentes
+
+Una vez analizadas las correlaciones de los datos, y visualizados los datos mediante las caras de Chernoff, estamos en disposición de realizar un análisis de componentes principales (ACP), con el objetivo de determinar si una componente tiene la capacidad de explicar la mayor parte del comportamiento de los valores cotizados seleccionados en la muestra, y así, construir un índice nuevo. Es decir, en definitiva, el análisis ACP, nos permitirá transformar _"un conjunto de variables correlacionadas en un nuevo conjunto de variables incorrelacionadas"_ [@Fernandez2021a].
+
+## 4.1. Ejecución del análisis ACP
+
+Veamos por tanto, los datos de las componentes principales para nuestro conjunto de datos. En el siguiente panel podemos observar que la PC1 recoge ya más del 60% de la varianza y/o comportamiento de las variables originales recogidas por cada componente.
+
+```{r, comment = ''}
+fit1 <- princomp(datos_acp, 
+                 cor = TRUE)
+fit1 %>% 
+  summary()
+```
+
+```{r, comment = ''}
+pc1 <- unclass(loadings(fit1))
+round(pc1, 
+      digits = 2)
+```
+
+De esta forma, podemos representar los datos del ACP de forma gráfica mediante la librería `printcomp()`, la cual nos permite visualizar un _screeplot_ o gráfico de sedimentación. En dicho gráfico vemos como la PC1, al igual que anteriormente comentábamos, parece recoger la mayor parte del comportamiento de las variables (rendimiento trimestral) del conjunto de datos de los valores cotizados.
+
+```{r, fig.align = 'center', fig.width = 10, fig.height = 5}
+screeplot(fit1, 
+          col = "red4", 
+          main = "Screeplot o gráfico de sedimentación")
+```
+
+```{r, fig.align = 'center', fig.width = 10, fig.height = 5}
+plot(fit1,
+     type = "lines", 
+     col = "red4", 
+     lwd = "3", 
+     main = "Screeplot o gráfico de sedimentación")
+```
+
+En la misma línea, podemos observar un gráfico a partir de las puntuaciones del análisis ACP. Al mostrar gráficamente qué parte de la variación es recogida por cada componente, vemos que hay un salto significativo entre uno y dos componentes, pero sobre todo que el tercero y el cuarto explican bastante menos la varianza de nuestros datos. En los siguientes apartados indagaremos más en la cuestión y en sus detalles.
+
+```{r, fig.align = 'center', fig.width = 10, fig.height = 5}
+pc.datos_acp <- fit1$scores
+biplot(fit1, 
+       cex = 0.6,
+       col = 'red4')
+```
+
+## 4.2. Componentes a retener
+
+Una vez realizado en análisis de componentes principales, es fundamental determinar en qué medida se retienen más o menos componentes. Para ello existen distintos criterios que vamos a ver a continuación. Recordemos en este punto que el objetivo final es poder quedarnos con una única PC.
+
+### 4.2.1. Criterio de varianza explicada acumulada
+
+Este criterio considera retener las componentes en función de la varianza explicada acumulada según se seleccionen más o menos componentes. En este caso, siguiendo la recomendación de Morrison (1967), se deberían retener las dos primeras componentes (varianza explicada acumulada > 75%). En este caso, y teniendo en cuenta nuestro objetivo, desecharemos este criterio y optaremos por los resultados de los dos siguientes.
+
+```{r, comment = ''}
+fit1 %>% 
+  summary()
+```
+
+### 4.2.2. Criterio de la media aritmética (autovalores)
+
+Este criterio considera retener tantas componentes como su valor, en la tabla de datos denominado como _eigenvalue_, sea superior a 1. En este caso, se confirma que con este criterio **retendríamos una única componente**.
+
+```{r, comment = ''}
+# Criterio media aritmética (autovalores)
+res.pca <- PCA(datos_acp, 
+               graph = FALSE)
+eig.val <- get_eigenvalue(res.pca)
+eig.val
+```
+
+### 4.2.3. Criterio de Cattel (gráfico de sedimentación)
+
+Este criterio considera retener las componentes que se sitúan en la zona previa a la zona de sedimentación (cambio de tendencia de la curva). En este caso, al igual que en el anterior, también retendríamos **una única componente**.
+
+```{r, fig.align = 'center', fig.width = 10, fig.height = 5}
+# Criterio de Cattel (gráfico sedimentación)
+fviz_eig(res.pca, 
+         addlabels = TRUE, 
+         ylim = c(0, 50))
+```
+
+## 4.3. Interpretación de las componentes principales analizadas
+
+En definitiva, se ha decidido retener una única componente (PC1) a partir del análisis de los distintos criterios de retención.
+
+# 5. Presentación de resultados y conclusiones
+
+En este último capítulo se procederá a presentar los resultados del análisis ACP y las conclusiones más relevantes. Así, para ello, se utilizará la función `get_pca_var()`, que contiene la siguiente información.
+
+```{r, comment = ''}
+# Información contenida
+var <- get_pca_var(res.pca)
+var
+```
+
+En primer lugar, si observamos el círculo de correlación, vemos que los rendimientos del T1 y T2 son los que mayores correlaciones presentan entre sí positivamente. Por otra parte, la variable T3 sería la que mejor está representada en el mapa de factores en términos de calidad.
+
+```{r, fig.align = 'center', fig.width = 10, fig.height = 5}
+# Círculo de correlación
+set.seed(123)
+my.cont.var <- rnorm(4)
+
+# Color variables
+fviz_pca_var(res.pca, 
+             col.var = my.cont.var,
+             gradient.cols = c("blue", "yellow", "red", "red4"),
+             legend.title = "Cont.Var")
+```
+
+En otro sentido, podemos plantear la calidad de las variables utilizadas (rendimientos) en las dimensiones. Así podemos ver que la mayor parte de variables están bien representadas en la PC1, a excepción de T3.
+
+```{r, fig.align = 'center', fig.width = 10, fig.height = 5}
+# Representación de las variables en las dimensiones
+corrplot(var$cos2, 
+         is.corr = FALSE)
+```
+
+También es posible, en la misma línea, crear un diagrama de barras de las variables cos2 usando el paquete `factoextra()`, que nos muestra los mismos resultados que el anterior gráfico, donde T1 es la que mejor se representa en la PC1 a diferencia de T3 que es la que menos.
+
+```{r, fig.align = 'center', fig.width = 10, fig.height = 5}
+# Gráfico barras cos2
+fviz_cos2(res.pca, 
+          choice = "var", 
+          axes = 1)
+```
+
+Podemos seguir analizando las variables y su relación con las componentes, determinando en qué medida contribuye cada variable a dichas componentes. En el siguiente gráfico se puede observar la contribución de las variables a las componentes, y podemos ver que a la componente primera, la retenida, cotnribuyen por igual forma T1, T2 y T4, mientras que T3 contribuye, especialmente, a la segunda componente, la cual si se retenía aumentaba casi un 20% la explicación del comportamiento de las variables, aunque finalmente se había optado por el criterio de retener una única componente.
+
+```{r, fig.align = 'center', fig.width = 10, fig.height = 5}
+corrplot(var$contrib, 
+         method = "pie", 
+         is.corr = FALSE)
+```
+
+Esto mismo puede representarse mediante un gráfico de barras que muestra cuánto contribuye cada variable a la primera componente y otro gráfico _biplot_ que resalta las variables más importantes en la contribución entre la PC1 y PC2.
+
+```{r, fig.align = 'center', fig.width = 10, fig.height = 5}
+par(mfrow=c(1,2))
+fviz_contrib(res.pca, 
+             choice = "var", 
+             fill = "red4", 
+             color = "lightgray", 
+             axes = 1, 
+             top = 10)
+```
+
+
+```{r, fig.align = 'center', fig.width = 10, fig.height = 5}
+fviz_pca_var(res.pca,
+             col.var = "contrib",
+             gradient.cols = c("#00AFBB", 
+                               "#E7B800", 
+                               "#FC4E07"))
+```
+
+Siguiendo con el análisis, se pueden representar las observaciones (valores cotizados) y su representación en las dos primeras componentes (PC1 y PC2). Veamos como Tesla se aleja de forma significativa del área media donde se situán el resto de valores cotizados.
+
+```{r, fig.align = 'center', fig.width = 10, fig.height = 5}
+fviz_pca_ind(res.pca, col.ind = "cos2",
+             gradient.cols = c("#00AFBB", 
+                               "#E7B800", 
+                               "#FC4E07"),
+             repel = TRUE)
+```
+
+Por último, se puede observar que Tesla (TSLA) es el valor cotizado que más explica o contribuye a la primera componente retenida (PC1).
+
+```{r}
+fviz_contrib(res.pca, 
+             choice = "ind", 
+             axes = 1, 
+             fill = "red4", 
+             color = "lightgray")
+
+```
+
+En definitiva, las principales conclusiones que podemos extraer de este informe son:
+
+  + El análisis de componentes principales nos permite simplificar y mejorar la forma de obtener conclusiones.
+  + Se ha podido analizar los movimientos generales de precios de las empresas tecnológicas del NASDAQ en el 2019 a través de un único componente principal, ya sea separando los datos que tenemos por empresas como por trimestres.
+  + El tercer trimestre de 2019 se comporta de una manera distinta al resto del año.
+  + Tesla (TSLA) se comporta de una manera distinta al resto de empresas tecnológicas.
+  
+# Referencias bibliográficas
+
+> La gestión de referencias bibliográficas se ha realizado a través del gestor bibliográfico Mendeley® y posteriormente se ha integrado en el documento R Markdown con las ayudas proporcionadas por @Ramos2021, @VanHespen2016 y @Vidal2011.  
+
+<div id="refs"></div>
+
+# Anexos
+
+## Anexo 1. Datos de la sesión
+
+En esta sección se recogen los datos de la sesión utilizada para elaborar este informe. Siguiendo a @Cano2021, es fundamental observar la versión de R, así como las versiones de los paquetes bajo los cuales se ha ejecutado el código o _script_.
+
+```{r, echo = FALSE, comment = ''}
+sessionInfo()
+```
+
+\newpage
+
+## Anexo 2. Base de datos
+
+A continuación se presentan los datos utilizados e importados para elaborar el informe.
+
+```{r, echo = FALSE, comment= ''}
+datos_acp %>% 
+  kable(booktabs = TRUE, 
+        format = "latex",
+        digits = 3) %>%
+  kable_styling(font_size = 8,
+                latex_options = c("striped", 
+                                  "condensed", 
+                                  "hold_position"), 
+                position = "center", 
+                full_width = F) %>% 
+  row_spec(0, bold = T, 
+           color = "black")
+```
+
+\newpage
+
+## Anexo 3. Código (_script_) utilizado
+
+A continuación se presenta el _script_ utilizado para desarrollar el informe.
+
+```{r, echo = FALSE, comment= ''}
+script <- readLines("TMAAS_03.Rmd")
+print(script)
+```
