@@ -1,0 +1,923 @@
+---
+title: "eSports y nuevas tendencias digitales"
+subtitle: "Tratamiento y Análisis Exploratorio de Datos Económicos - MUMADE"  
+author: "Pérez, R.S., Romero, S. & Margotón, F.J."
+institute: "Universidad de Castilla-La Mancha"
+date: "9 noviembre, 2021"
+output:
+  xaringan::moon_reader:
+    css: xaringan-themer.css
+    nature:
+      slideNumberFormat: "%current%"
+      highlightStyle: github
+      highlightLines: true
+      ratio: 16:9
+      countIncrementalSlides: true
+---
+
+layout: true
+background-image: url(image_4.png)
+background-position: 98% 0% 
+background-size: 10%
+
+```{r setup, include = FALSE}
+options(htmltools.dir.version = FALSE)
+knitr::opts_chunk$set(fig.width = 9, 
+                      fig.height = 3.5, 
+                      fig.retina = 3,
+                      out.width = "100%",
+                      cache = FALSE,
+                      echo = TRUE,
+                      message = FALSE, 
+                      warning = FALSE,
+                      hiline = TRUE)
+
+library(xaringanthemer)
+```
+
+```{r xaringan-themer, include = FALSE, warning = FALSE}
+style_mono_accent(
+  base_color = "#b30033",
+  header_font_google = google_font("Josefin Sans"),
+  text_font_google   = google_font("Montserrat", "300", "300i"),
+  code_font_google   = google_font("Fira Mono")
+)
+```
+
+---
+
+## Índice
+
+# 1. Introducción
+
+# 2. Tratamiento
+
+# 3. Análisis
+
+# 4. Conclusiones
+
+---
+class: inverse center middle
+
+# 1. Introducción
+
+Un poco de contexto...
+---
+
+# 1. Introducción
+
+## Perspectiva histórica
+
+  - Años 70: inicio del mundo _gaming_
+  - Siglo XXI: "sorpasso" de los medios digitales
+  - Consumo en aumento del contenido digital y plataformas _streaming_
+
+.pull-left[
+![](https://phantom-marca.unidadeditorial.es/f707c82979d843c10903d6178c2dc11a/resize/660/f/webp/assets/multimedia/imagenes/2020/11/03/16043944030799.jpg)
+]
+
+.pull-right[
+![](https://consolaretro.top/wp-content/uploads/2019/08/pacman.jpg)
+]
+
+---
+# 1. Introducción
+
+.left-column[
+
+## ¿Qué son
+
+## los _eSports_?
+
+]
+
+.right-column[
+
+#### _Competiciones de videojuegos deportivos, bajo una **organización reglada** (ligas, torneos, etc.) que se realizan entre diversos jugadores (**multijugador**), y donde es frecuente su retransmisión **en directo** (en plataformas tan populares como Twitch), la entrega de premios con elevadas cantidades de **dinero** asociadas o su profesionalización (TechLib, 2021; Carillo, 2016; IMS, 2019; Casells, 2021)._
+
+<img src="https://educowebmedia.blob.core.windows.net/educowebmedia/educospain/media/images/blog/que-son-los-esports-portada.jpg" width="400" height="200" />
+
+]
+
+.footnote[La Real Academia Española (RAE), a través del Observatorio de Palabras, en su recomendación para el uso alternativo al anglicismo _eSports_, define este concepto como “ciberdeportes”
+o “deportes electrónicos” (RAE 2021).]
+
+---
+class: inverse center middle
+
+# 2. Tratamiento de los datos
+
+¿De dónde proceden nuestros datos? ¿Cómo se han recogido? ¿Se han presentado problemas? ¿Qué tratamiento se ha hecho de los valores perdidos? ¿Qué transformaciones se han aplicado?
+---
+
+# 2. Tratamiento de los datos
+
+  - Bases de datos: _Esports Earnings_ y Forbes (Settimi, 2020). Exportación manual con Microsoft&reg; Excel&reg; (.xlsx).
+
+![](image_3.png)
+
+.pull-left[
+
+  - Tratamiento de datos:
+  
+    - Codificación ISO 3166-1 alfa-3
+    - Puntos (.) y comas (,)
+    - Depuración
+    - _Missing values_
+    - Tipo de cambio (`USD 1 = EUR 0.8607`) (26/10/2021 - European Central Bank)
+
+]
+
+.pull-right[
+
+<img src="https://pic2.zhimg.com/0407adcdb0edaec59f1f435b03be00b7_1440w.jpg?source=172ae18b" width = "300" height = "300" />
+
+]
+
+---
+
+# 2. Tratamiento de los datos
+
+#### Ejemplos
+
+```{r, eval = FALSE}
+options(htmltools.dir.version = FALSE)
+knitr::opts_chunk$set(fig.width = 9, 
+                      fig.height = 3.5, 
+                      fig.retina = 3,
+                      out.width = "100%",
+                      cache = FALSE,
+                      echo = TRUE,
+                      message = FALSE, 
+                      warning = FALSE,
+                      hiline = TRUE)
+
+style_mono_accent(
+  base_color = "#b30033",
+  header_font_google = google_font("Josefin Sans"),
+  text_font_google   = google_font("Montserrat", "300", "300i"),
+  code_font_google   = google_font("Fira Mono")
+)
+```
+
+---
+
+# 2. Tratamiento de los datos
+
+#### Ejemplos importación, filtrado, etc.
+
+```{r, eval = FALSE}
+# Importación de datos
+top_paises_19 <- read_excel("TAEDE_dataset.xlsx", 
+                            sheet = "top_paises_19")
+
+top_paises_19 <- data.frame(top_paises_19, row.names = 1)
+
+# Missing values
+top_paises_19 %>% 
+  filter(is.na(INGC_DOL) | is.na(JUG))
+
+top_paises_19 <- top_paises_19 %>% 
+  filter(! is.na(INGC_DOL) & ! is.na(JUG))
+
+# Conversión monetaria a euros
+top_paises_19 <- top_paises_19 %>% 
+  add_column(INGC_EUR = top_paises_19$INGC_DOL*0.8607)
+
+# Ordención de datos de mayor a menor según INGC_EUR
+top_paises_19 <- top_paises_19 %>% 
+  arrange(desc(INGC_EUR))
+```
+
+---
+
+# 2. Tratamiento de los datos
+
+#### Ejemplos tablas y gráficos
+
+```{r, eval = FALSE}
+# Tabla
+library(gt)
+forbes_20_coef %>%
+  gt() %>%
+  tab_header(title = "Empresas con mayores ingresos procedentes de eSports") %>%
+  cols_label(COEFICIENTE = "Coef. ingresos eSports", VALOR = "Valor", ING_ESTIMADOS = "Ing. estimados") %>%
+  tab_source_note(source_note = "Fuente: Settimi (2020)")
+
+# Gráfico
+serie_temporal %>% 
+  ggplot(aes(x=YEAR, 
+             y = PM_EUR)) +
+  geom_line(size = 1, 
+            colour = "grey3")+
+  geom_point(size = 4, 
+             alpha = 0.8, 
+             colour = 'red4') +
+  xlab('Año') +
+  ylab('Premio monetario (mil. eur.)') +
+  ggtitle('Evolución del nivel del volumen de premios') +
+  theme_minimal()
+```
+
+---
+
+# 2. Tratamiento de los datos
+
+Ejemplos presentación **xaringanthemer** (fuera de los chunk)
+
+```{r, eval = FALSE}
+# Estilo durante la presentación (ej.: logo TAEDE UCLM (image_4.png))
+layout: true
+background-image: url(image_4.png)
+background-position: 98% 0% 
+background-size: 10%
+
+# Nota a pie de página
+.footnote[Tabla maquetada con `gt()` de la librería `gt`.]
+
+# Reorganizar espacio de la slide
+
+.pull-left[
+
+contenido
+
+]
+
+.pull-right[
+  
+contenido
+
+]
+```
+
+---
+class: inverse center middle
+
+# 3. Análisis de los datos
+
+¿Qué nos cuentan los datos? ¿Qué información se extrae de los métodos utilizados?
+---
+
+# 3. Análisis de los datos
+
+### 3.1. Análisis por equipos/empresas
+
+### 3.2. Análisis por países
+
+### 3.3. Análisis por juegos
+
+### 3.4. Análisis por impacto económico
+
+---
+class: center middle
+
+# 3.1. Análisis por equipos/empresas
+
+---
+
+## 3.1. Análisis por equipos/empresas
+
+```{r, include = FALSE}
+# Importación de datos (i)
+library(readxl)
+library(tidyr)
+library(dplyr)
+library(tibble)
+forbes_20 <- read_excel("TAEDE_dataset.xlsx", 
+                                sheet = "forbes_20")
+
+# Importación de datos (ii)
+top_paises_19 <- read_excel("TAEDE_dataset.xlsx", 
+                            sheet = "top_paises_19")
+
+top_paises_19 <- data.frame(top_paises_19, row.names = 1)
+
+top_paises_20 <- read_excel("TAEDE_dataset.xlsx", 
+                            sheet = "top_paises_20")
+
+top_paises_20 <- data.frame(top_paises_20, row.names = 1)
+
+# Eliminación missing values
+top_paises_19 %>% 
+  filter(is.na(INGC_DOL) | is.na(JUG))
+
+top_paises_19 <- top_paises_19 %>% 
+  filter(! is.na(INGC_DOL) & ! is.na(JUG))
+
+top_paises_20 %>% 
+  filter(is.na(INGC_DOL) | is.na(JUG))
+
+top_paises_20 <- top_paises_20 %>% 
+  filter(! is.na(INGC_DOL) & ! is.na(JUG))
+
+# Conversión monetaria a euros
+top_paises_19 <- top_paises_19 %>% 
+  add_column(INGC_EUR = top_paises_19$INGC_DOL*0.8607)
+
+top_paises_20 <- top_paises_20 %>% 
+  add_column(INGC_EUR = top_paises_20$INGC_DOL*0.8607)
+
+# Eliminación de la columna INGC_DOL
+top_paises_19 <- top_paises_19 %>% 
+  subset(select = c(INGC_EUR, JUG))
+
+top_paises_20 <- top_paises_20 %>% 
+  subset(select = c(INGC_EUR, JUG))
+
+# Ordención de datos de mayor a menor según INGC_EUR
+top_paises_19 <- top_paises_19 %>% 
+  arrange(desc(INGC_EUR))
+
+top_paises_20 <- top_paises_20 %>% 
+  arrange(desc(INGC_EUR))
+
+# Importación de datos (iii)
+top_juegos_20 <- read_excel("TAEDE_dataset.xlsx", 
+                            sheet = "top_juegos_20")
+
+top_juegos_20 <- top_juegos_20 %>% 
+  mutate(JUEGO = as.integer(JUEG))
+
+# Eliminación missing values
+top_juegos_20 %>% 
+  filter(is.na(DOL_DIS) | is.na(JUG) | is.na(TOR))
+
+top_juegos_20 <- top_juegos_20 %>% 
+  filter(! is.na(DOL_DIS) & ! is.na(JUG) & ! is.na(TOR))
+
+# Conversión monetaria a euros
+top_juegos_20 <- top_juegos_20 %>% 
+  add_column(EUR_DIS = (top_juegos_20$DOL_DIS*0.8607)/1000)
+
+# Eliminación columna DOL_DIS y JUEGOS
+top_juegos_20 <- top_juegos_20 %>% 
+  subset(select = c(JUEG, EUR_DIS, JUG, TOR))
+
+# Importar base de datos serie temporal (iv)
+serie_temporal <- read_excel("TAEDE_dataset.xlsx", 
+                             sheet = "serie_temporal")
+
+# Eliminación de missing values
+serie_temporal %>% 
+  filter(is.na(PM_DOL) | is.na(MPM_DOL) | is.na(MIJ_DOL) | is.na(MDIJ_DOL) | is.na(MDPM_DOL) | is.na(TOR) | is.na(JUG_AC))
+
+serie_temporal <- serie_temporal %>% 
+  filter(! is.na(PM_DOL) & ! is.na(MPM_DOL) & ! is.na(MIJ_DOL) & ! is.na(MDIJ_DOL) & ! is.na(MDPM_DOL) & ! is.na(TOR) & ! is.na(JUG_AC))
+
+# Conversión monetaria a euros
+serie_temporal <- serie_temporal %>%
+  mutate(YEAR = as.integer(Año)) %>% 
+  add_column(PM_EUR = (serie_temporal$PM_DOL*0.8607)/1000) %>%
+  add_column(MPM_EUR = (serie_temporal$MPM_DOL*0.8607))%>%
+  add_column(MIJ_EUR = (serie_temporal$MIJ_DOL*0.8607))%>%
+  add_column(MDPM_EUR = (serie_temporal$MPM_DOL*0.8607)) %>% 
+  add_column(MDIJ_EUR = (serie_temporal$MDIJ_DOL*0.8607)) %>% 
+  subset(select = c(YEAR, TOR, JUG_AC, PM_EUR, MPM_EUR, MIJ_EUR, MDPM_EUR, MDIJ_EUR))
+```
+
+```{r}
+forbes_20_coef <- forbes_20 %>% 
+  filter(COEFICIENTE > 0.5) %>% 
+  select (Empresa, COEFICIENTE, VALOR, ING_ESTIMADOS) %>% 
+  arrange(desc(COEFICIENTE))
+```
+
+```{r, echo = FALSE}
+library(gt)
+forbes_20_coef %>%
+  gt() %>%
+  tab_header(title = "Empresas con mayores ingresos procedentes de eSports") %>%
+  cols_label(COEFICIENTE = "Coef. ingresos eSports", VALOR = "Valor", ING_ESTIMADOS = "Ing. estimados") %>%
+  tab_source_note(source_note = "Fuente: Settimi (2020)")
+```
+
+.footnote[Tabla maquetada con `gt()` de la librería `gt`.]
+
+---
+
+## 3.1. Análisis por equipos/empresas
+
+```{r, echo = FALSE}
+library(ggplot2)
+forbes_20 %>% 
+  ggplot(aes(x = Empresa, y = COEFICIENTE)) +
+  xlab('Empresa') +
+  ylab('Coeficiente (%)') +
+  geom_col(bins = 20, 
+           colour = 'black', 
+           fill = 'red4') + 
+  ggtitle('Porcentaje de ingresos directamente procedentes de los eSports') +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, 
+                                   size = 9, 
+                                   hjust = 1, 
+                                   vjust = 1),
+        axis.text.y = element_text (size = 9))
+```
+
+---
+class: center middle
+
+# 3.2. Análisis por países
+
+---
+
+## 3.2. Análisis por países
+
++ En 2020, los `r count(top_paises_20)` países de la muestra obtuvieron una media de 840 mil euros apróx. de ingresos procedentes de competiciones. 
++ La media de jugadores en 2020 fue de `r mean(top_paises_20$JUG)`. 
++ Nº de jugadores más elevados en un país: `r max(top_paises_20$JUG)`.
+
+```{r, echo = FALSE}
+top_paises_20 %>% 
+  ggplot(aes(x = row.names(top_paises_20), 
+             y = INGC_EUR)) +
+  geom_point(size = 2, 
+             alpha = 1, 
+             colour = 'red4') +
+  xlab('País') +
+  ylab('Ingresos competiciones (eur)') +
+  ggtitle('Ingresos de competiciones por países en 2020') +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, 
+                                   size = 10, 
+                                   hjust = 1, 
+                                   vjust = 1))
+```
+
+---
+
+## 3.2. Análisis por países
+
++ En 2020, los `r count(top_paises_20)` países de la muestra obtuvieron una media de 840 mil euros apróx. de ingresos procedentes de competiciones. 
++ La media de jugadores en 2020 fue de `r mean(top_paises_20$JUG)`. 
++ Nº de jugadores más elevados en un país: `r max(top_paises_20$JUG)`.
+
+```{r, echo = FALSE}
+library(corrplot)
+# Filtrado jugadores
+top_paises_20_filtrado1 <- top_paises_20 %>% 
+  filter (INGC_EUR > 1000000)
+
+top_paises_20_filtrado1 %>% 
+  ggplot(aes(x = row.names(top_paises_20_filtrado1), 
+             y = INGC_EUR)) +
+  geom_point(size = 2, alpha = 1, 
+             colour = 'red4') +
+  xlab('País') +
+  ylab('Ingresos competiciones (eur)') +
+  ggtitle('Ingresos de competiciones por países en 2020') +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, 
+                                   size = 10, 
+                                   hjust = 1, 
+                                   vjust = 1))
+```
+
+---
+
+## 3.2. Análisis por países
+
+#### ¿Los países que mayor número de jugadores de _eSports_ tienen, también son los que más dinero, en términos de competiciones, reparten? Viendo las correlaciones...
+
+.pull-left[
+
+#### Correlaciones 2019
+
+```{r}
+top_paises_19_cor <- cor(top_paises_19 %>% 
+                       select(where(is.numeric)))
+
+top_paises_19_cor %>% 
+  corrplot(method = "color", 
+           order = "hclust")
+```
+
+]
+
+.pull-right[
+
+#### Correlaciones 2020
+
+```{r}
+top_paises_20_cor <- cor(top_paises_20 %>% 
+                       select(where(is.numeric)))
+top_paises_20_cor %>% 
+  corrplot(method = "color", 
+           order = "hclust")
+```
+
+]
+
+---
+
+## 3.2. Análisis por países
+
+#### Dispersión en 2019 (ingresos y jugadores)
+
+.pull-left[
+
+```{r, eval = FALSE}
+top_paises_19 %>% 
+  select(INGC_EUR, JUG) %>% 
+  ggplot(aes(INGC_EUR, JUG)) +
+  geom_point(size = 2, 
+             alpha= 0.7, 
+             color = "orange") +
+  ggtitle("Dispersión en 2019 (ingresos y jugadores)") +
+  geom_smooth(color = "red4") +
+  xlab('Ingresos de competiciones') +
+  ylab ('Número de jugadores') +
+  theme_minimal()
+```
+
+]
+
+.pull-right[
+
+```{r, echo = FALSE, fig.height = 6}
+top_paises_19 %>% 
+  select(INGC_EUR, JUG) %>% 
+  ggplot(aes(INGC_EUR, JUG)) +
+  geom_point(size = 2, 
+             alpha= 0.7, 
+             color = "orange") +
+  ggtitle("Dispersión en 2019 (ingresos y jugadores)") +
+  geom_smooth(color = "red4") +
+  xlab('Ingresos de competiciones') +
+  ylab ('Número de jugadores') +
+  theme_minimal()
+```
+
+]
+
+---
+
+## 3.2. Análisis por países
+
+#### Dispersión en 2020 (ingresos y jugadores)
+
+```{r, echo = FALSE}
+top_paises_20 %>% 
+  ggplot(aes(x = INGC_EUR,
+             y = JUG,
+             colour = INGC_EUR,
+             size = JUG)) +
+  geom_point(size = 2, 
+             alpha= 0.7) +
+  ggtitle("Dispersión en 2020 (ingresos y jugadores)") +
+  geom_smooth(color = "red4") +
+  xlab('Ingresos de competiciones') +
+  ylab ('Número de jugadores') +
+  theme_minimal()
+```
+
+---
+
+## 3.2. Análisis por países
+
+#### Posibles outliers
+
+```{r, echo = FALSE, fig.width = 15, fig.height = 6}
+library(aplpack)
+top_paises_20_filtrado1 %>% faces(cex = 0.8, print.info = FALSE, face.type = 2)
+```
+
+---
+
+## 3.2. Análisis por países
+
+#### Análisis clúster exploratorio
+
+```{r, echo = FALSE}
+library(factoextra)
+library(igraph)
+ward_hc <- hcut(top_paises_20, k = 4,
+                func_hc = "hclust", hc_metric = "euclidean", hc_method = "ward.D2")
+set.seed(100)
+fviz_dend(x = ward_hc, k = 4,
+          k_colors = c("blue3", "green4", "red4", "turquoise4"),
+          color_labels_by_k = TRUE,
+          cex = 0.8,
+          type = "phylogenic",
+          repel = TRUE)
+```
+
+---
+class: center middle
+
+# 3.3. Análisis por juegos
+
+---
+
+## 3.3. Análisis por juegos
+
++ Retroalimentación premios-crecimiento industria
++ 2020: 197 juegos profesionales y 120 millones de euros en premios
+
+#### ¿Qué juegos distribuyeron más dinero?
+
+.pull-left[
+
+```{r, echo = FALSE, fig.height = 6}
+# Filtramos y obtenemos los 10 juegos que mas dinero han repartido en premios, por encima de 400.000€.
+top_juegos_20_10 <- top_juegos_20 %>% 
+  filter(EUR_DIS > 4000)
+
+# Gráfico
+top_juegos_20_10 %>% 
+  ggplot(aes(x = EUR_DIS, 
+             y = JUEG)) + 
+  xlab('Dinero distribuido (mil. eur.)') +
+  ylab('Juego') +
+  geom_col(bins = 5, 
+           colour = 'black', 
+           fill = 'red4') +
+  ggtitle('Juegos con mayor distribución monetaria en 2020') +
+  theme_minimal() +
+  theme(axis.text.x = element_text(size = 10))
+```
+
+]
+
+.pull-right[
+
+```{r, echo = FALSE, fig.height = 6}
+# Filtramos y obtenemos los 3 juegos que mas dinero han repartido en premios, por encima de 800.000€.
+top_juegos_20_3 <- top_juegos_20 %>% 
+  filter(EUR_DIS > 8000)
+
+# Gráfico
+top_juegos_20_3 %>% 
+  ggplot(aes(x = JUEG, 
+             y = EUR_DIS)) +
+  xlab('Juego') +
+  ylab('Dinero distribuido (mil. eur.)') +
+  geom_col(bins = 20, 
+           colour = 'black', 
+           fill = 'red4') + 
+  ggtitle('Top 3 juegos con mayor distribución monetaria en premios en 2020') +
+  theme_minimal() +
+  theme(axis.text.x = element_text(size = 10))
+```
+
+]
+
+---
+
+## 3.3. Análisis por juegos
+
+#### Torneos organizados
+
++ Selección: juegos con más de 50 torneos organizados
++ Los juegos que más dinero distribuyen no son los que más eventos desarrollan.
+
+```{r, echo = FALSE}
+# Filtrado de torneos
+top_juegos_tor <- top_juegos_20 %>% 
+  filter(TOR > 50) 
+
+# Gráfico
+top_juegos_tor %>% 
+  ggplot(aes(x = TOR, 
+             y = JUEG)) +
+  xlab('Nº de torneos') +
+  ylab('Juego') +
+  geom_col(bins = 20, 
+           colour = 'black', 
+           fill = 'red4') +
+  ggtitle('Nº de torneos por juegos organizados en 2020') +
+  theme_minimal()
+```
+
+---
+
+## 3.3. Análisis por juegos
+
+#### Juegos competitivos líderes
+
++ Selección: juegos con más de 300 jugadores profesionales
++ **Counter-Strike: Global offensive** lidera junto a _Valorant_ y _League of Legends_.
+
+```{r, echo = FALSE}
+# Filtrado jugadores
+top_juegos_players <- top_juegos_20 %>% 
+  filter (JUG > 300)
+
+# Gráfico
+top_juegos_players %>% 
+  ggplot(aes(x = JUG, 
+             y = JUEG)) + 
+  xlab('Nº de jugadores') +
+  ylab('Juego') +
+  geom_col (bins = 5,
+            colour = 'black', 
+            fill = 'red4')+
+  ggtitle('Juegos más jugados en 2020') +
+  theme_minimal()
+```
+
+---
+class: center middle
+
+# 3.4. Análisis por impacto monetario
+
+---
+
+## 3.4. Análisis por impacto monetario
+
+#### Análisis de la evolución del sector _eSports_ mediante una serie temporal
+
++ Desde el año 2002 al año 2020 (n = 19).
++ Variables: premios monetarios, media de ingresos por jugador, mediana de ingresos por jugador, etc.
+
+<img src="image_8.jpeg" width = "1000" height = "400" />
+
+---
+
+## 3.4. Análisis por impacto monetario
+
+#### Evolución del volumen de ingresos generados por los premios de los diferentes torneos
+
++ Relevancia escasa del sector hasta 2013 y 2014 gracias al "boom tecnológico".
++ Año Covid-19: cancelaciones y menores premios, pero recuperación rápida por el espacio de juego.
+
+```{r, echo = FALSE}
+serie_temporal %>% 
+  ggplot(aes(x=YEAR, 
+             y = PM_EUR)) +
+  geom_line(size = 1, 
+            colour = "grey3")+
+  geom_point(size = 4, 
+             alpha = 0.8, 
+             colour = 'red4') +
+  xlab('Año') +
+  ylab('Premio monetario (mil. eur.)') +
+  ggtitle('Evolución del nivel del volumen de premios') +
+  theme_minimal()
+```
+
+---
+
+## 3.4. Análisis por impacto monetario
+
+#### Análisis de la evolución de los ingresos medios por jugadores de _eSports_
+
++ Crecimiento continuado hasta 2020 (año Covid-19: menos torneos y menos premios).
++ Caída de ingresos en 2008: crisis económica.
+
+```{r, echo = FALSE}
+serie_temporal %>% 
+  ggplot(aes(x = YEAR, 
+             y = MIJ_EUR)) +
+  geom_line(size = 1, 
+            colour = "grey3")+
+  geom_point(size = 4, 
+             alpha = 0.8, 
+             colour = 'red4') +
+  xlab('Año') +
+  ylab('Media de ingresos por jugador (eur.)') +
+  ggtitle('Evolución del nivel de ingresos medio por jugador') +
+  theme_minimal()
+```
+
+---
+
+## 3.4. Análisis por impacto monetario
+
+#### Análisis de la evolución del número de jugadores activos
+
++ Crecimiento continuo hasta 2020
++ Año Covid-19: menor nº de jugadores, menores torneos o abandonos de la carrera deportiva
+
+```{r, echo = FALSE}
+serie_temporal %>% 
+  ggplot(aes(x = YEAR, 
+             y = JUG_AC)) +
+  xlab('Año') +
+  ylab('Nº jugadores activos') +
+  geom_col (colour = 'black', 
+            fill = 'red4')+
+  ggtitle('Evolución del número de jugadores activos por año') +
+  theme_minimal()
+```
+
+---
+
+## 3.4. Análisis por impacto monetario
+
+#### Intensidad de las correlaciones entre variables
+
+```{r, echo = FALSE}
+serie_temporal %>% 
+  select(TOR, JUG_AC, PM_EUR, MIJ_EUR) %>% 
+  cor() %>% 
+  corrplot(method = "ellipse")
+```
+
+---
+class: inverse center middle
+
+# 4. Conclusiones
+¿Cuáles han sido los análisis más relevantes? ¿Cómo impactan las conclusiones de los datos en el marco de investigación? ¿Futuras líneas de investigación?
+---
+
+# 4. Conclusiones
+
+.pull-left[
+
++ El ecosistema _eSports_ está **"de moda"**.
++ USA, CHN y KOR **lideran** el crecimiento del sector.
++ **Counter Strike: Global Offensive** es el juego líder.
++ Sector con **cada vez más** jugadores, patrocinadores, competencia, etc.
++ Los deportes electrónicos, no eran relevantes hasta la aparicion de los **medios digitales**.
++ La **Covid-19** ha afectado a un sector que, por sus características, ha conseguido no verse igual de dañado que los demás.
++ ¿**Futuras líneas de investigación**?
+
+]
+
+.pull-right[
+
+<img src="https://www.digitalbizmagazine.com/wp-content/uploads/2021/06/flujo_trabajo_cognitive_legal_advisor1026b.jpg" width="500" height="400" />
+
+]
+
+---
+
+## 🔗 Enlaces de interés
+
+#### Mercado eSports
+
+  - eSports: a new industry (Block, S. & Haack, F., 2021) (DOI: https://doi.org/10.1051/shsconf/20219204002).
+  - De jugadores a espectadores. La construcción del espectáculo mediático en el contexto de los eSports (Carillo, J., 2016) (DOI: https://doi.org/10.7238/a.v0i55.2893)
+  - Global Esports & Live Streaming Market Report 2021 (Newzoo, 2021). (https://newzoo.com/insights/trend-reports/newzoos-global-esports-live-streaming-market-report-2021-free-version/).
+  - Los eSports: origen, evolución y tendencias (Martín, D. & Pedrero, LM., 2019) (DOI: https://doi.org/10.21814/vista.3016).
+  
+#### R Presentations, Xaringan & Xaringan Themer
+
+  - Presentations in R - Chapter 4 R Markdown: The Definitive Guide (Yihui Xie, J. J. Allaire, Garrett Grolemund): https://bookdown.org/yihui/rmarkdown/presentations.html  
+  - Construye presentaciones en R Markdown con Xaringan (Jan Kirenz): https://www.kirenz.com/slides/xaringan-demo-slides.html#1  
+  - Conoce **xaringan** (Alison Hill): https://arm.rbind.io/slides/xaringan#91  
+  - Cambia temas usando **xaringanthemer** (Garrick Aden): https://pkg.garrickadenbuie.com/xaringanthemer/  
+
+---
+class: inverse center middle
+
+# Anexos
+
+Datos de la sesión, _script_, etc.
+
+---
+
+## Anexo I.
+
+.left-column[
+
+## Datos de
+
+## la sesión
+
+]
+
+.right-column[
+
+```{r, comment = '', echo = FALSE}
+sessionInfo()
+```
+
+]
+
+---
+
+## Anexo II. 
+
+.left-column[
+
+## Script
+
+## Utilizado
+
+]
+
+.right-column[
+
+```{r, comment = '', echo = FALSE}
+script <- readLines("TAEDE_presentation.Rmd")
+print(script)
+```
+
+]
+
+
+
+---
+class: center, middle
+layout: false
+
+# ¡Gracias!
+
+<center><img src="image_1.png" height="200px" /></center>
+
+
+Esta presentación ha sido creada con R, a través de su entorno RStudio y el procesador R Markdown. 
+La maquetación de la presentación ha sido a través del _package_ [**xaringan**](https://github.com/yihui/xaringan) y el paquete complementario [**xaringanthemer**](https://github.com/gadenbuie/xaringanthemer).
