@@ -1,3 +1,3 @@
 # MUMADE Repositorie
 
-Hello world
+This repository contains my own and group work carried out at the MUMADE - UCLM
